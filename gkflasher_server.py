@@ -248,6 +248,8 @@ def connect_ecu(state: LogState) -> None:
 
 
 def make_handler(state: LogState, index_path: Path):
+    web_root = index_path.parent
+
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             if self.path in ("/", "/index.html"):
@@ -305,6 +307,37 @@ def make_handler(state: LogState, index_path: Path):
                         state.clients.discard(client_queue)
                 return
 
+            if self.path.startswith("/"):
+                rel_path = self.path.lstrip("/")
+                file_path = (web_root / rel_path).resolve()
+                try:
+                    file_path.relative_to(web_root)
+                except ValueError:
+                    file_path = None
+
+                if file_path and file_path.is_file():
+                    content_type = "application/octet-stream"
+                    suffix = file_path.suffix.lower()
+                    if suffix == ".js":
+                        content_type = "application/javascript; charset=utf-8"
+                    elif suffix == ".css":
+                        content_type = "text/css; charset=utf-8"
+                    elif suffix == ".html":
+                        content_type = "text/html; charset=utf-8"
+                    elif suffix == ".svg":
+                        content_type = "image/svg+xml"
+                    elif suffix in (".png", ".jpg", ".jpeg", ".ico"):
+                        content_type = f"image/{suffix.lstrip('.')}"
+                    elif suffix == ".map":
+                        content_type = "application/json; charset=utf-8"
+
+                    self.send_response(200)
+                    self.send_header("Content-Type", content_type)
+                    self.end_headers()
+                    with open(file_path, "rb") as handle:
+                        self.wfile.write(handle.read())
+                    return
+
             self.send_response(404)
             self.end_headers()
 
@@ -321,6 +354,37 @@ def make_handler(state: LogState, index_path: Path):
                 }
                 self.wfile.write(json.dumps(body).encode("utf-8"))
                 return
+
+            if self.path.startswith("/"):
+                rel_path = self.path.lstrip("/")
+                file_path = (web_root / rel_path).resolve()
+                try:
+                    file_path.relative_to(web_root)
+                except ValueError:
+                    file_path = None
+
+                if file_path and file_path.is_file():
+                    content_type = "application/octet-stream"
+                    suffix = file_path.suffix.lower()
+                    if suffix == ".js":
+                        content_type = "application/javascript; charset=utf-8"
+                    elif suffix == ".css":
+                        content_type = "text/css; charset=utf-8"
+                    elif suffix == ".html":
+                        content_type = "text/html; charset=utf-8"
+                    elif suffix == ".svg":
+                        content_type = "image/svg+xml"
+                    elif suffix in (".png", ".jpg", ".jpeg", ".ico"):
+                        content_type = f"image/{suffix.lstrip('.')}"
+                    elif suffix == ".map":
+                        content_type = "application/json; charset=utf-8"
+
+                    self.send_response(200)
+                    self.send_header("Content-Type", content_type)
+                    self.end_headers()
+                    with open(file_path, "rb") as handle:
+                        self.wfile.write(handle.read())
+                    return
 
             self.send_response(404)
             self.end_headers()

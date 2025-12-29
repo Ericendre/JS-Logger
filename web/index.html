@@ -185,7 +185,8 @@
       }
 
       .overlay-item {
-        display: flex;
+        display: grid;
+        grid-template-columns: auto 1fr;
         align-items: center;
         gap: 10px;
         font-size: 13px;
@@ -297,6 +298,44 @@
         color: var(--muted);
       }
 
+      .chart-wrapper {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+
+      #history-chart {
+        width: 100%;
+        height: 100%;
+      }
+
+      .chart-tooltip {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+        background: rgba(10, 18, 26, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 12px;
+        padding: 10px 12px;
+        color: var(--text);
+        font-size: 12px;
+        transform: translate(-50%, -110%);
+        white-space: nowrap;
+      }
+
+      .chart-tooltip strong {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--muted);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .chart-tooltip span {
+        display: block;
+      }
+
       table {
         width: 100%;
         border-collapse: collapse;
@@ -389,7 +428,10 @@
         </div>
         <div class="panel-grid" id="panel-grid"></div>
         <div class="panel-bottom">
-          <p>Zone reservee (placeholder)</p>
+          <div class="chart-wrapper">
+            <canvas id="history-chart"></canvas>
+            <div class="chart-tooltip" id="chart-tooltip"></div>
+          </div>
         </div>
       </div>
       
@@ -441,6 +483,10 @@
           <label for="value-decimals">Decimales</label>
           <input class="value-input" id="value-decimals" type="number" min="0" max="6" placeholder="auto" />
         </div>
+        <div class="overlay-field">
+          <label for="value-alias">Alias</label>
+          <input class="value-input" id="value-alias" type="text" placeholder="Nom court" />
+        </div>
         <div class="overlay-actions">
           <button class="button" id="value-save">Appliquer</button>
           <button class="button" id="value-clear">Auto</button>
@@ -481,6 +527,7 @@
         </div>
       </div>
     </div>
+    <script src="chart.umd.min.js"></script>
     <script>
       const body = document.getElementById("table-body");
       const statusDot = document.getElementById("status-dot");
@@ -498,6 +545,7 @@
       const valueOverlay = document.getElementById("value-overlay");
       const valueTitle = document.getElementById("value-title");
       const valueDecimals = document.getElementById("value-decimals");
+      const valueAlias = document.getElementById("value-alias");
       const valueSave = document.getElementById("value-save");
       const valueClear = document.getElementById("value-clear");
       const valueClose = document.getElementById("value-close");
@@ -508,6 +556,8 @@
       const panelApply = document.getElementById("panel-apply");
       const panelClose = document.getElementById("panel-close");
       const panelGrid = document.getElementById("panel-grid");
+      const chartCanvas = document.getElementById("history-chart");
+      const chartTooltip = document.getElementById("chart-tooltip");
       const cellOverlay = document.getElementById("cell-overlay");
       const cellTitle = document.getElementById("cell-title");
       const cellSelect = document.getElementById("cell-select");
@@ -525,6 +575,8 @@
       let simulateTimer = null;
       const hiddenLabels = new Set();
       const hiddenStorageKey = "gkflasher.hiddenLabels";
+      const aliasMap = new Map();
+      const aliasStorageKey = "gkflasher.aliasMap";
       const valueDecimalsMap = new Map();
       const valueStorageKey = "gkflasher.valueDecimals";
       const valueCellMap = new Map();
@@ -535,6 +587,9 @@
       const panelStorageKey = "gkflasher.panelConfig";
       let panelCells = [];
       let activePanelCellIndex = null;
+      const historyWindowMs = 30000;
+      const historySeries = new Map();
+      let historyChart = null;
 
       function setStatus(text, state) {
         statusText.textContent = text;
@@ -621,6 +676,7 @@
         const date = new Date(sample.ts);
         timestampEl.textContent = `Last update: ${date.toLocaleTimeString()}`;
         updatePanelValues(sample);
+        updateHistoryChart(sample);
       }
 
       async function fetchStatus() {
@@ -789,6 +845,9 @@
         }
         const current = valueDecimalsMap.get(label);
         valueDecimals.value = current === undefined ? "" : String(current);
+        if (valueAlias) {
+          valueAlias.value = aliasMap.get(label) || "";
+        }
         valueOverlay.classList.add("active");
       }
 
@@ -814,9 +873,20 @@
           }
         }
         saveValueDecimals();
+        if (valueAlias) {
+          const aliasValue = valueAlias.value.trim();
+          if (aliasValue) {
+            aliasMap.set(activeValueLabel, aliasValue);
+          } else {
+            aliasMap.delete(activeValueLabel);
+          }
+          saveAliasMap();
+        }
         if (lastSample) {
           updateValues(lastSample);
         }
+        buildPanelGrid();
+        syncHistoryDatasets();
         closeValueOptions();
       }
 
@@ -827,9 +897,47 @@
         valueDecimalsMap.delete(activeValueLabel);
         valueDecimals.value = "";
         saveValueDecimals();
+        if (valueAlias) {
+          valueAlias.value = "";
+          aliasMap.delete(activeValueLabel);
+          saveAliasMap();
+        }
         if (lastSample) {
           updateValues(lastSample);
         }
+        buildPanelGrid();
+        syncHistoryDatasets();
+      }
+
+      function saveAliasMap() {
+        try {
+          const items = Array.from(aliasMap.entries());
+          localStorage.setItem(aliasStorageKey, JSON.stringify(items));
+        } catch (error) {
+        }
+      }
+
+      function loadAliasMap() {
+        try {
+          const raw = localStorage.getItem(aliasStorageKey);
+          if (!raw) {
+            return;
+          }
+          const items = JSON.parse(raw);
+          if (Array.isArray(items)) {
+            aliasMap.clear();
+            items.forEach(([label, alias]) => {
+              if (typeof alias == "string" && alias.trim()) {
+                aliasMap.set(label, alias.trim());
+              }
+            });
+          }
+        } catch (error) {
+        }
+      }
+
+      function displayName(label) {
+        return aliasMap.get(label) || label;
       }
 
       function saveHiddenLabels() {
@@ -958,7 +1066,7 @@
           cell.className = "panel-cell";
           const labelEl = document.createElement("div");
           labelEl.className = "panel-label";
-          labelEl.textContent = label || `Cell ${index + 1}`;
+          labelEl.textContent = label ? displayName(label) : `Cell ${index + 1}`;
           const valueEl = document.createElement("div");
           valueEl.className = "panel-value";
           valueEl.textContent = "--";
@@ -977,6 +1085,7 @@
         if (lastSample) {
           updatePanelValues(lastSample);
         }
+        syncHistoryDatasets();
       }
 
       function openPanelSettings() {
@@ -1019,7 +1128,7 @@
           if (!cell) {
             return;
           }
-          cell.labelEl.textContent = label || `Cell ${index + 1}`;
+          cell.labelEl.textContent = label ? displayName(label) : `Cell ${index + 1}`;
           if (!label || !labelIndexMap.has(label)) {
             cell.valueEl.textContent = "--";
             return;
@@ -1048,7 +1157,7 @@
           }
           const option = document.createElement("option");
           option.value = label;
-          option.textContent = label;
+          option.textContent = displayName(label);
           cellSelect.appendChild(option);
         });
         const current = panelConfig.assignments[index] || "";
@@ -1073,6 +1182,189 @@
         savePanelConfig();
         buildPanelGrid();
         closeCellOptions();
+      }
+
+      function getPanelLabels() {
+        const labels = [];
+        panelConfig.assignments.forEach((label) => {
+          if (!label || hiddenLabels.has(label)) {
+            return;
+          }
+          if (!labels.includes(label)) {
+            labels.push(label);
+          }
+        });
+        return labels;
+      }
+
+      function ensureHistorySeries(labels) {
+        labels.forEach((label) => {
+          if (!historySeries.has(label)) {
+            historySeries.set(label, []);
+          }
+        });
+        Array.from(historySeries.keys()).forEach((label) => {
+          if (!labels.includes(label)) {
+            historySeries.delete(label);
+          }
+        });
+      }
+
+      function trimSeries(series, now) {
+        const cutoff = now - historyWindowMs;
+        while (series.length && series[0].x < cutoff) {
+          series.shift();
+        }
+      }
+
+      function initHistoryChart() {
+        if (historyChart) {
+          return;
+        }
+        if (!chartCanvas || !window.Chart) {
+          return;
+        }
+        const colors = ["#f39c12", "#2ecc71", "#3498db", "#e74c3c", "#9b59b6", "#1abc9c", "#f1c40f"];
+        const externalTooltipHandler = (context) => {
+          if (!chartTooltip) {
+            return;
+          }
+          const tooltip = context.tooltip;
+          if (tooltip.opacity === 0) {
+            chartTooltip.style.opacity = 0;
+            return;
+          }
+          const lines = tooltip.dataPoints || [];
+          let html = "";
+          if (lines.length) {
+            const ts = lines[0].parsed.x;
+            const timeLabel = new Date(ts).toLocaleTimeString();
+            html += `<strong>${timeLabel}</strong>`;
+          }
+          lines.forEach((point) => {
+            html += `<span>${point.dataset.label}: ${point.formattedValue}</span>`;
+          });
+          chartTooltip.innerHTML = html;
+          const { offsetLeft, offsetTop } = context.chart.canvas;
+          chartTooltip.style.left = offsetLeft + tooltip.caretX + "px";
+          chartTooltip.style.top = offsetTop + tooltip.caretY + "px";
+          chartTooltip.style.opacity = 1;
+        };
+
+        const verticalLine = {
+          id: "verticalLine",
+          afterDraw(chart) {
+            const tooltip = chart.tooltip;
+            if (tooltip && tooltip._active && tooltip._active.length) {
+              const ctx = chart.ctx;
+              const x = tooltip._active[0].element.x;
+              const topY = chart.chartArea.top;
+              const bottomY = chart.chartArea.bottom;
+              ctx.save();
+              ctx.beginPath();
+              ctx.moveTo(x, topY);
+              ctx.lineTo(x, bottomY);
+              ctx.lineWidth = 1;
+              ctx.strokeStyle = "rgba(255,255,255,0.2)";
+              ctx.stroke();
+              ctx.restore();
+            }
+          },
+        };
+
+        historyChart = new Chart(chartCanvas, {
+          type: "line",
+          data: { datasets: [] },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: { mode: "index", intersect: false },
+            plugins: {
+              legend: { display: false },
+              tooltip: { enabled: false, external: externalTooltipHandler },
+            },
+            scales: {
+              x: {
+                type: "linear",
+                grid: { color: "rgba(255,255,255,0.05)" },
+                ticks: {
+                  color: "rgba(255,255,255,0.6)",
+                  callback: (value) => {
+                    if (!lastSample) {
+                      return "";
+                    }
+                    const delta = Math.round((value - lastSample.ts) / 1000);
+                    return `${delta}s`;
+                  },
+                },
+              },
+              y: {
+                grid: { color: "rgba(255,255,255,0.05)" },
+                ticks: { color: "rgba(255,255,255,0.6)" },
+              },
+            },
+          },
+          plugins: [verticalLine],
+        });
+
+        historyChart._colors = colors;
+        syncHistoryDatasets();
+      }
+
+      function syncHistoryDatasets() {
+        if (!historyChart) {
+          initHistoryChart();
+        }
+        if (!historyChart) {
+          return;
+        }
+        const labels = getPanelLabels();
+        ensureHistorySeries(labels);
+        historyChart.data.datasets = labels.map((label, index) => {
+          const color = historyChart._colors[index % historyChart._colors.length];
+          return {
+            label: displayName(label),
+            data: historySeries.get(label) || [],
+            borderColor: color,
+            backgroundColor: color,
+            borderWidth: 2,
+            tension: 0.25,
+            pointRadius: 0,
+          };
+        });
+        historyChart.update("none");
+      }
+
+      function updateHistoryChart(sample) {
+        if (!sample) {
+          return;
+        }
+        if (!historyChart) {
+          initHistoryChart();
+        }
+        if (!historyChart) {
+          return;
+        }
+        const labels = getPanelLabels();
+        ensureHistorySeries(labels);
+        labels.forEach((label) => {
+          const idx = labelIndexMap.get(label);
+          if (idx === undefined) {
+            return;
+          }
+          const value = Number(sample.values[idx]);
+          if (!Number.isFinite(value)) {
+            return;
+          }
+          const series = historySeries.get(label);
+          series.push({ x: sample.ts, y: value });
+          trimSeries(series, sample.ts);
+        });
+        historySeries.forEach((series) => trimSeries(series, sample.ts));
+        historyChart.options.scales.x.min = sample.ts - historyWindowMs;
+        historyChart.options.scales.x.max = sample.ts;
+        historyChart.update("none");
       }
 
       function connect() {
@@ -1100,8 +1392,10 @@
 
       loadHiddenLabels();
       loadValueDecimals();
+      loadAliasMap();
       loadPanelConfig();
       buildPanelGrid();
+      initHistoryChart();
       connect();
       fetchStatus();
       setInterval(fetchStatus, 3000);
