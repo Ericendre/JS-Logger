@@ -239,6 +239,7 @@
         flex-direction: column;
         gap: 12px;
         height: 100%;
+        min-height: 0;
       }
 
       .tab-panel.panel-split.active {
@@ -249,6 +250,7 @@
         flex: 1;
         display: grid;
         gap: 12px;
+        min-height: 0;
       }
 
       .panel-cell {
@@ -296,12 +298,17 @@
         border-radius: 14px;
         padding: 12px;
         color: var(--muted);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        overflow: hidden;
       }
 
       .chart-wrapper {
         position: relative;
         width: 100%;
-        height: 100%;
+        flex: 1;
+        min-height: 0;
       }
 
       #history-chart {
@@ -334,6 +341,18 @@
 
       .chart-tooltip span {
         display: block;
+      }
+
+      .chart-controls {
+        margin-top: 8px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      #chart-slider {
+        flex: 1;
+        accent-color: var(--accent);
       }
 
       table {
@@ -431,6 +450,10 @@
           <div class="chart-wrapper">
             <canvas id="history-chart"></canvas>
             <div class="chart-tooltip" id="chart-tooltip"></div>
+          </div>
+          <div class="chart-controls">
+            <button class="button" id="chart-toggle">Pause</button>
+            <input id="chart-slider" type="range" min="0" max="100" value="0" />
           </div>
         </div>
       </div>
@@ -558,6 +581,8 @@
       const panelGrid = document.getElementById("panel-grid");
       const chartCanvas = document.getElementById("history-chart");
       const chartTooltip = document.getElementById("chart-tooltip");
+      const chartToggle = document.getElementById("chart-toggle");
+      const chartSlider = document.getElementById("chart-slider");
       const cellOverlay = document.getElementById("cell-overlay");
       const cellTitle = document.getElementById("cell-title");
       const cellSelect = document.getElementById("cell-select");
@@ -590,6 +615,9 @@
       const historyWindowMs = 30000;
       const historySeries = new Map();
       let historyChart = null;
+      let chartPaused = false;
+      let viewWindowMs = historyWindowMs;
+      let sliderValue = 0;
 
       function setStatus(text, state) {
         statusText.textContent = text;
@@ -1217,6 +1245,46 @@
         }
       }
 
+      function getHistoryBounds() {
+        let min = null;
+        let max = null;
+        historySeries.forEach((series) => {
+          if (!series.length) {
+            return;
+          }
+          const first = series[0].x;
+          const last = series[series.length - 1].x;
+          if (min === null || first < min) {
+            min = first;
+          }
+          if (max === null || last > max) {
+            max = last;
+          }
+        });
+        return { min, max };
+      }
+
+      function updateChartWindow() {
+        if (!historyChart) {
+          return;
+        }
+        const bounds = getHistoryBounds();
+        if (bounds.max === null) {
+          return;
+        }
+        const latest = bounds.max;
+        const earliest = bounds.min === null ? latest : bounds.min;
+        const maxOffset = Math.max(0, latest - earliest - viewWindowMs);
+        if (chartSlider) {
+          chartSlider.disabled = maxOffset <= 0;
+        }
+        const offset = maxOffset * (sliderValue / 100);
+        const xMax = latest - offset;
+        const xMin = xMax - viewWindowMs;
+        historyChart.options.scales.x.min = xMin;
+        historyChart.options.scales.x.max = xMax;
+      }
+
       function initHistoryChart() {
         if (historyChart) {
           return;
@@ -1333,11 +1401,12 @@
             pointRadius: 0,
           };
         });
+        updateChartWindow();
         historyChart.update("none");
       }
 
       function updateHistoryChart(sample) {
-        if (!sample) {
+        if (!sample || chartPaused) {
           return;
         }
         if (!historyChart) {
@@ -1362,8 +1431,7 @@
           trimSeries(series, sample.ts);
         });
         historySeries.forEach((series) => trimSeries(series, sample.ts));
-        historyChart.options.scales.x.min = sample.ts - historyWindowMs;
-        historyChart.options.scales.x.max = sample.ts;
+        updateChartWindow();
         historyChart.update("none");
       }
 
@@ -1466,6 +1534,36 @@
             closeCellOptions();
           }
         });
+      }
+      if (chartToggle) {
+        chartToggle.addEventListener("click", () => {
+          chartPaused = !chartPaused;
+          chartToggle.textContent = chartPaused ? "Play" : "Pause";
+          if (!chartPaused && lastSample) {
+            updateHistoryChart(lastSample);
+          }
+        });
+      }
+      if (chartSlider) {
+        chartSlider.addEventListener("input", () => {
+          sliderValue = Number(chartSlider.value) || 0;
+          updateChartWindow();
+          if (historyChart) {
+            historyChart.update("none");
+          }
+        });
+      }
+      if (chartCanvas) {
+        chartCanvas.addEventListener("wheel", (event) => {
+          event.preventDefault();
+          const delta = Math.sign(event.deltaY);
+          const factor = delta > 0 ? 1.2 : 0.8;
+          viewWindowMs = Math.min(historyWindowMs, Math.max(5000, viewWindowMs * factor));
+          updateChartWindow();
+          if (historyChart) {
+            historyChart.update("none");
+          }
+        }, { passive: false });
       }
 
       setInterval(() => {
