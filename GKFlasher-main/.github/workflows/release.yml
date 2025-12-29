@@ -1,0 +1,97 @@
+name: Build Workflow
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    if: ${{ inputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.tag }}
+
+      - name: Get Build Version from git tag
+        id: get_build_version
+        run: |
+          echo "target version is ${{ inputs.tag }}"
+
+      - name: Install Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12.3'
+          architecture: 'x64'
+          allow-prereleases: true
+
+      - name: Install GKFlasher Requirements
+        run: |
+          pip install -r requirements.txt
+
+      - name: Embed version into package
+        run: |
+          echo "__version__ = '${{ inputs.tag }}'" > _version.py
+      - name: Install Build Environment Prerequisites
+        run: |
+          pip install pyinstaller==6.16.0
+          pip install cryptography==45.0.1
+          pip install pillow==10.4.0
+
+      - name: Build EXE Package
+        run: |
+          python -m PyInstaller .github/workflows/gui.spec
+#  for debug purposes, upload the build artifact as a zip.
+      - uses: actions/upload-artifact@v4
+        with:
+          ##name: Upload PyInstaller "Output" Directory
+          path: dist/*
+
+      - name: Install WiX
+        run: dotnet tool install --global wix
+
+      - name: Build MSI Package
+        shell: pwsh
+        run: |
+          $tag = '${{ inputs.tag }}'
+          if (-not $tag) { throw "inputs.tag is empty" }
+
+          # Trim leading "v" and enforce MSI-friendly A.B.C
+          $ver = $tag.TrimStart('v')
+          if ($ver -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Version '$ver' is not MSI-safe (expected a.b.c). Tag was '$tag'."
+          }
+
+          echo "Using MSI ProductVersion: $ver"
+
+          # Compile .wxs to .wixobj
+          candle .github/workflows/dialog.wxs `
+                 .github/workflows/ui.wxs `
+                 .github/workflows/product.wxs `
+                 -dversion="$ver"
+
+          # Link to .msi
+          light -ext WixUIExtension -ext WixUtilExtension -sacl -spdb `
+                -out "./GKFlasher-$tag-amd64.msi" `
+                ./dialog.wixobj ./ui.wixobj ./product.wixobj
+
+      - name: Upload MSI to Releases
+        uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: ${{ inputs.tag }}
+          prerelease: false
+          title: ${{ inputs.tag }}
+          files: |
+            GKFlasher-${{ inputs.tag }}-amd64.msi
