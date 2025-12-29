@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -26,10 +26,15 @@
         font-family: "Bahnschrift", "Franklin Gothic Medium", "Segoe UI", sans-serif;
         color: var(--text);
         background: radial-gradient(1200px 600px at 10% 10%, #244a64 0%, var(--bg) 50%, #0b141e 100%);
+        overflow: hidden;
       }
 
       header {
         padding: 24px clamp(16px, 4vw, 48px) 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
       }
 
       h1 {
@@ -47,11 +52,16 @@
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        margin-top: 12px;
         padding: 6px 12px;
         border-radius: 999px;
         background: var(--panel);
         font-size: 13px;
+      }
+
+      .header-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
       }
 
       .dot {
@@ -63,7 +73,7 @@
       }
 
       .controls {
-        margin-top: 14px;
+        margin-top: 0;
       }
 
       .button {
@@ -83,7 +93,11 @@
       }
 
       main {
-        padding: 8px clamp(16px, 4vw, 48px) 48px;
+        padding: 8px clamp(16px, 4vw, 48px) 24px;
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 150px);
+        gap: 16px;
       }
 
       .card {
@@ -92,6 +106,195 @@
         border-radius: 16px;
         padding: 16px;
         backdrop-filter: blur(10px);
+        overflow: hidden;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .tab {
+        border: 1px solid transparent;
+        border-radius: 999px;
+        padding: 8px 16px;
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--text);
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        cursor: pointer;
+      }
+
+      .tab.active {
+        background: var(--panel-strong);
+        border-color: rgba(255, 255, 255, 0.2);
+        color: var(--accent);
+      }
+
+      .tab-panel {
+        display: none;
+        flex: 1;
+      }
+
+      .tab-panel.active {
+        display: block;
+      }
+
+      .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .overlay {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(4, 9, 14, 0.7);
+        z-index: 10;
+      }
+
+      .overlay.active {
+        display: flex;
+      }
+
+      .overlay-card {
+        width: min(560px, 90vw);
+        max-height: 80vh;
+        background: rgba(15, 31, 46, 0.98);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .overlay-list {
+        overflow: auto;
+        padding-right: 6px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .overlay-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .overlay-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .overlay-field {
+        display: grid;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .value-input {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+
+      .icon-button {
+        width: 34px;
+        height: 34px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        background: rgba(255, 255, 255, 0.05);
+        cursor: pointer;
+      }
+
+      .icon-button svg {
+        width: 16px;
+        height: 16px;
+        fill: #ffffff;
+      }
+
+      .tab-panel.panel-split {
+        display: none;
+        flex-direction: column;
+        gap: 12px;
+        height: 100%;
+      }
+
+      .tab-panel.panel-split.active {
+        display: flex;
+      }
+
+      .panel-grid {
+        flex: 1;
+        display: grid;
+        gap: 12px;
+      }
+
+      .panel-cell {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        position: relative;
+      }
+
+      .panel-gear {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+      }
+
+      .panel-cell:hover .panel-gear {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .panel-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+      }
+
+      .panel-value {
+        font-size: clamp(32px, 6vw, 64px);
+        font-weight: 700;
+        color: #ffffff;
+        line-height: 1;
+      }
+
+      .panel-bottom {
+        flex: 1;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 14px;
+        padding: 12px;
+        color: var(--muted);
       }
 
       table {
@@ -127,7 +330,6 @@
       }
 
       .timestamp {
-        margin-top: 12px;
         font-size: 12px;
         color: var(--muted);
       }
@@ -157,39 +359,182 @@
   </head>
   <body>
     <header>
-      <h1>GKFlasher Live Logger</h1>
-      <p>Streaming ECU values from your car.</p>
-      <div class="status" id="status">
-        <span class="dot" id="status-dot"></span>
-        <span id="status-text">Connecting...</span>
+      <div>
+        <h1>GKFlasher Live Logger</h1>
+        <p>Streaming ECU values from your car.</p>
       </div>
-      <div class="controls">
-        <button class="button" id="connect-button">Connect ECU</button>
+      <div class="header-right">
+        <div class="status" id="status">
+          <span class="dot" id="status-dot"></span>
+          <span id="status-text">Connecting...</span>
+          <span id="status-hz">Hz: --</span>
+        </div>
+        <div class="controls">
+          <button class="button" id="connect-button">Connect ECU</button>
+        </div>
       </div>
     </header>
+
     <main>
-      <div class="card">
+      <div class="tabs">
+        <button class="tab" data-tab="overview">Overview</button>
+        <button class="tab active" data-tab="raw">Raw Data</button>
+        <button class="tab" data-tab="settings">Settings</button>
+      </div>
+
+      <div class="card tab-panel panel-split" data-panel="overview">
+        <div class="panel-header">
+          <strong>Panel</strong>
+          <button class="button" id="panel-settings">Settings</button>
+        </div>
+        <div class="panel-grid" id="panel-grid"></div>
+        <div class="panel-bottom">
+          <p>Zone reservee (placeholder)</p>
+        </div>
+      </div>
+      
+      <div class="card tab-panel active" data-panel="raw">
+        <div class="panel-header">
+          <strong>Raw data</strong>
+          <button class="button" id="options-button">Options</button>
+        </div>
         <table>
           <thead>
             <tr>
               <th>Parameter</th>
               <th style="text-align: right">Value</th>
+              <th style="text-align: center">Options</th>
             </tr>
           </thead>
           <tbody id="table-body"></tbody>
         </table>
         <div class="timestamp" id="timestamp"></div>
       </div>
+      
+      <div class="card tab-panel" data-panel="settings">
+        <p>Simulation locale des donnees (sans ECU).</p>
+        <div class="controls">
+          <button class="button" id="simulate-button">Start simulation</button>
+        </div>
+      </div>
     </main>
+    <div class="overlay" id="options-overlay">
+      <div class="overlay-card">
+        <div class="panel-header">
+          <strong>Afficher / cacher les valeurs</strong>
+          <button class="button" id="options-close">Fermer</button>
+        </div>
+        <div class="overlay-list" id="options-list"></div>
+        <div class="overlay-actions">
+          <button class="button" id="options-show-all">Tout afficher</button>
+          <button class="button" id="options-hide-all">Tout cacher</button>
+        </div>
+      </div>
+    </div>
+    <div class="overlay" id="value-overlay">
+      <div class="overlay-card">
+        <div class="panel-header">
+          <strong id="value-title">Options</strong>
+          <button class="button" id="value-close">Fermer</button>
+        </div>
+        <div class="overlay-field">
+          <label for="value-decimals">Decimales</label>
+          <input class="value-input" id="value-decimals" type="number" min="0" max="6" placeholder="auto" />
+        </div>
+        <div class="overlay-actions">
+          <button class="button" id="value-save">Appliquer</button>
+          <button class="button" id="value-clear">Auto</button>
+        </div>
+      </div>
+    </div>
+    <div class="overlay" id="panel-overlay">
+      <div class="overlay-card">
+        <div class="panel-header">
+          <strong>Panel settings</strong>
+          <button class="button" id="panel-close">Fermer</button>
+        </div>
+        <div class="overlay-field">
+          <label for="panel-rows">Lignes</label>
+          <input class="value-input" id="panel-rows" type="number" min="1" max="6" />
+        </div>
+        <div class="overlay-field">
+          <label for="panel-cols">Colonnes</label>
+          <input class="value-input" id="panel-cols" type="number" min="1" max="6" />
+        </div>
+        <div class="overlay-actions">
+          <button class="button" id="panel-apply">Appliquer</button>
+        </div>
+      </div>
+    </div>
+    <div class="overlay" id="cell-overlay">
+      <div class="overlay-card">
+        <div class="panel-header">
+          <strong id="cell-title">Cellule</strong>
+          <button class="button" id="cell-close">Fermer</button>
+        </div>
+        <div class="overlay-field">
+          <label for="cell-select">Valeur</label>
+          <select class="value-input" id="cell-select"></select>
+        </div>
+        <div class="overlay-actions">
+          <button class="button" id="cell-apply">Appliquer</button>
+        </div>
+      </div>
+    </div>
     <script>
       const body = document.getElementById("table-body");
       const statusDot = document.getElementById("status-dot");
       const statusText = document.getElementById("status-text");
+      const statusHz = document.getElementById("status-hz");
       const timestampEl = document.getElementById("timestamp");
       const connectButton = document.getElementById("connect-button");
+      const simulateButton = document.getElementById("simulate-button");
+      const optionsButton = document.getElementById("options-button");
+      const optionsOverlay = document.getElementById("options-overlay");
+      const optionsList = document.getElementById("options-list");
+      const optionsClose = document.getElementById("options-close");
+      const optionsShowAll = document.getElementById("options-show-all");
+      const optionsHideAll = document.getElementById("options-hide-all");
+      const valueOverlay = document.getElementById("value-overlay");
+      const valueTitle = document.getElementById("value-title");
+      const valueDecimals = document.getElementById("value-decimals");
+      const valueSave = document.getElementById("value-save");
+      const valueClear = document.getElementById("value-clear");
+      const valueClose = document.getElementById("value-close");
+      const panelSettings = document.getElementById("panel-settings");
+      const panelOverlay = document.getElementById("panel-overlay");
+      const panelRows = document.getElementById("panel-rows");
+      const panelCols = document.getElementById("panel-cols");
+      const panelApply = document.getElementById("panel-apply");
+      const panelClose = document.getElementById("panel-close");
+      const panelGrid = document.getElementById("panel-grid");
+      const cellOverlay = document.getElementById("cell-overlay");
+      const cellTitle = document.getElementById("cell-title");
+      const cellSelect = document.getElementById("cell-select");
+      const cellApply = document.getElementById("cell-apply");
+      const cellClose = document.getElementById("cell-close");
+      const tabs = Array.from(document.querySelectorAll(".tab"));
+      const panels = Array.from(document.querySelectorAll(".tab-panel"));
 
       const valueCells = [];
       let labelsReady = false;
+      let sampleCount = 0;
+      let lastHzTime = performance.now();
+      let currentLabels = [];
+      let simulateOn = false;
+      let simulateTimer = null;
+      const hiddenLabels = new Set();
+      const hiddenStorageKey = "gkflasher.hiddenLabels";
+      const valueDecimalsMap = new Map();
+      const valueStorageKey = "gkflasher.valueDecimals";
+      const valueCellMap = new Map();
+      const labelIndexMap = new Map();
+      let lastSample = null;
+      let activeValueLabel = null;
+      const panelConfig = { rows: 2, cols: 3, assignments: [] };
+      const panelStorageKey = "gkflasher.panelConfig";
+      let panelCells = [];
+      let activePanelCellIndex = null;
 
       function setStatus(text, state) {
         statusText.textContent = text;
@@ -210,32 +555,72 @@
       function buildTable(labels) {
         body.innerHTML = "";
         valueCells.length = 0;
+        valueCellMap.clear();
+        labelIndexMap.clear();
+        currentLabels = labels;
+        labels.forEach((label, index) => {
+          labelIndexMap.set(label, index);
+        });
         labels.forEach((label) => {
+          if (hiddenLabels.has(label)) {
+            return;
+          }
           const row = document.createElement("tr");
           const nameCell = document.createElement("td");
           const valueCell = document.createElement("td");
+          const optionsCell = document.createElement("td");
           nameCell.textContent = label;
           valueCell.className = "value";
           valueCell.textContent = "--";
+          optionsCell.style.textAlign = "center";
+          const button = document.createElement("button");
+          button.className = "icon-button";
+          button.type = "button";
+          button.title = "Options";
+          button.setAttribute("data-label", label);
+          button.innerHTML = "<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8zm9.3 3.4c0-.4 0-.7-.1-1l2-1.6-2-3.4-2.4 1a7.7 7.7 0 0 0-1.7-1l-.3-2.7H9.2l-.3 2.7c-.6.3-1.2.6-1.7 1l-2.4-1-2 3.4 2 1.6c-.1.3-.1.7-.1 1s0 .7.1 1l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1l.3 2.7h7.6l.3-2.7c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4-2-1.6c.1-.3.1-.7.1-1z'/></svg>";
+          button.addEventListener("click", () => openValueOptions(label));
+          optionsCell.appendChild(button);
           row.appendChild(nameCell);
           row.appendChild(valueCell);
+          row.appendChild(optionsCell);
           body.appendChild(row);
           valueCells.push(valueCell);
+          valueCellMap.set(label, valueCell);
         });
         labelsReady = true;
+        renderOptions();
+        buildPanelGrid();
+      }
+
+      function formatValue(value, label) {
+        if (!valueDecimalsMap.has(label)) {
+          return value;
+        }
+        const decimals = valueDecimalsMap.get(label);
+        const num = Number(value);
+        if (!Number.isFinite(num)) {
+          return value;
+        }
+        return num.toFixed(decimals);
       }
 
       function updateValues(sample) {
         if (!labelsReady) {
           return;
         }
-        sample.values.forEach((value, index) => {
-          if (valueCells[index]) {
-            valueCells[index].textContent = value;
+        lastSample = sample;
+        currentLabels.forEach((label, index) => {
+          const cell = valueCellMap.get(label);
+          if (!cell) {
+            return;
           }
+          const value = sample.values[index];
+          cell.textContent = formatValue(value, label);
         });
         const date = new Date(sample.ts);
         timestampEl.textContent = `Last update: ${date.toLocaleTimeString()}`;
+        updatePanelValues(sample);
       }
 
       async function fetchStatus() {
@@ -275,6 +660,421 @@
         fetchStatus();
       }
 
+      
+      function randomInRange(min, max, decimals) {
+        const value = min + Math.random() * (max - min);
+        return Number(value.toFixed(decimals));
+      }
+
+      function generateValue(label) {
+        const name = label.toLowerCase();
+        if (name.includes("rpm")) {
+          return randomInRange(700, 6500, 0);
+        }
+        if (name.includes("speed")) {
+          return randomInRange(0, 220, 0);
+        }
+        if (name.includes("coolant")) {
+          return randomInRange(70, 105, 1);
+        }
+        if (name.includes("oil")) {
+          return randomInRange(60, 130, 1);
+        }
+        if (name.includes("intake")) {
+          return randomInRange(10, 50, 1);
+        }
+        if (name.includes("temperature") || name.includes("temp")) {
+          return randomInRange(20, 110, 1);
+        }
+        if (name.includes("voltage") || name.includes("battery") || name.includes("(v)")) {
+          return randomInRange(11.8, 14.6, 2);
+        }
+        if (name.includes("oxygen") || name.includes("mv")) {
+          return randomInRange(0, 1000, 0);
+        }
+        if (name.includes("throttle") || name.includes("position")) {
+          return randomInRange(0, 100, 1);
+        }
+        if (name.includes("duty") || name.includes("%")) {
+          return randomInRange(0, 100, 1);
+        }
+        if (name.includes("ms")) {
+          return randomInRange(0, 20, 2);
+        }
+        if (name.includes("pressure")) {
+          return randomInRange(0, 100, 1);
+        }
+        if (name.includes("status") || name.includes("switch") || name.includes("relay") || name.includes("signal")) {
+          return Math.random() > 0.7 ? 1 : 0;
+        }
+        if (name.includes("trim")) {
+          return randomInRange(-15, 15, 1);
+        }
+        if (name.includes("ignition")) {
+          return randomInRange(-10, 40, 1);
+        }
+        if (name.includes("camshaft") || name.includes("cvvt")) {
+          return randomInRange(0, 80, 1);
+        }
+        return randomInRange(0, 255, 0);
+      }
+
+      function startSimulation() {
+        if (!labelsReady) {
+          setStatus("No labels yet", "warn");
+          return;
+        }
+        simulateOn = true;
+        simulateButton.textContent = "Stop simulation";
+        setStatus("Simulation", "warn");
+        simulateTimer = setInterval(() => {
+          const values = currentLabels.map(generateValue);
+          updateValues({ ts: Date.now(), values });
+          sampleCount += 1;
+        }, 200);
+      }
+
+      function stopSimulation() {
+        simulateOn = false;
+        simulateButton.textContent = "Start simulation";
+        if (simulateTimer) {
+          clearInterval(simulateTimer);
+          simulateTimer = null;
+        }
+        fetchStatus();
+      }
+
+      function toggleSimulation() {
+        if (simulateOn) {
+          stopSimulation();
+          return;
+        }
+        startSimulation();
+      }
+
+      function saveValueDecimals() {
+        try {
+          const items = Array.from(valueDecimalsMap.entries());
+          localStorage.setItem(valueStorageKey, JSON.stringify(items));
+        } catch (error) {
+        }
+      }
+
+      function loadValueDecimals() {
+        try {
+          const raw = localStorage.getItem(valueStorageKey);
+          if (!raw) {
+            return;
+          }
+          const items = JSON.parse(raw);
+          if (Array.isArray(items)) {
+            valueDecimalsMap.clear();
+            items.forEach(([label, decimals]) => {
+              if (Number.isInteger(decimals) && decimals >= 0) {
+                valueDecimalsMap.set(label, decimals);
+              }
+            });
+          }
+        } catch (error) {
+        }
+      }
+
+      function openValueOptions(label) {
+        if (!valueOverlay) {
+          return;
+        }
+        activeValueLabel = label;
+        if (valueTitle) {
+          valueTitle.textContent = label;
+        }
+        const current = valueDecimalsMap.get(label);
+        valueDecimals.value = current === undefined ? "" : String(current);
+        valueOverlay.classList.add("active");
+      }
+
+      function closeValueOptions() {
+        if (!valueOverlay) {
+          return;
+        }
+        valueOverlay.classList.remove("active");
+        activeValueLabel = null;
+      }
+
+      function applyValueOptions() {
+        if (!activeValueLabel) {
+          return;
+        }
+        const raw = valueDecimals.value.trim();
+        if (raw == "") {
+          valueDecimalsMap.delete(activeValueLabel);
+        } else {
+          const parsed = Number(raw);
+          if (Number.isInteger(parsed) && parsed >= 0) {
+            valueDecimalsMap.set(activeValueLabel, parsed);
+          }
+        }
+        saveValueDecimals();
+        if (lastSample) {
+          updateValues(lastSample);
+        }
+        closeValueOptions();
+      }
+
+      function resetValueOptions() {
+        if (!activeValueLabel) {
+          return;
+        }
+        valueDecimalsMap.delete(activeValueLabel);
+        valueDecimals.value = "";
+        saveValueDecimals();
+        if (lastSample) {
+          updateValues(lastSample);
+        }
+      }
+
+      function saveHiddenLabels() {
+        try {
+          const items = Array.from(hiddenLabels.values());
+          localStorage.setItem(hiddenStorageKey, JSON.stringify(items));
+        } catch (error) {
+        }
+      }
+
+      function loadHiddenLabels() {
+        try {
+          const raw = localStorage.getItem(hiddenStorageKey);
+          if (!raw) {
+            return;
+          }
+          const items = JSON.parse(raw);
+          if (Array.isArray(items)) {
+            hiddenLabels.clear();
+            items.forEach((item) => hiddenLabels.add(item));
+          }
+        } catch (error) {
+        }
+      }
+
+      function renderOptions() {
+        if (!optionsList) {
+          return;
+        }
+        optionsList.innerHTML = "";
+        currentLabels.forEach((label) => {
+          const item = document.createElement("label");
+          item.className = "overlay-item";
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.checked = !hiddenLabels.has(label);
+          checkbox.addEventListener("change", () => {
+            if (checkbox.checked) {
+              hiddenLabels.delete(label);
+            } else {
+              hiddenLabels.add(label);
+            }
+            saveHiddenLabels();
+            buildTable(currentLabels);
+          });
+          const text = document.createElement("span");
+          text.textContent = label;
+          item.appendChild(checkbox);
+          item.appendChild(text);
+          optionsList.appendChild(item);
+        });
+      }
+
+      function openOptions() {
+        if (!optionsOverlay) {
+          return;
+        }
+        renderOptions();
+        optionsOverlay.classList.add("active");
+      }
+
+      function closeOptions() {
+        if (!optionsOverlay) {
+          return;
+        }
+        optionsOverlay.classList.remove("active");
+      }
+
+      function showAllOptions() {
+        hiddenLabels.clear();
+        saveHiddenLabels();
+        buildTable(currentLabels);
+        renderOptions();
+      }
+
+      function hideAllOptions() {
+        currentLabels.forEach((label) => hiddenLabels.add(label));
+        saveHiddenLabels();
+        buildTable(currentLabels);
+        renderOptions();
+      }
+
+      function savePanelConfig() {
+        try {
+          localStorage.setItem(panelStorageKey, JSON.stringify(panelConfig));
+        } catch (error) {
+        }
+      }
+
+      function loadPanelConfig() {
+        try {
+          const raw = localStorage.getItem(panelStorageKey);
+          if (!raw) {
+            return;
+          }
+          const data = JSON.parse(raw);
+          if (data && Number.isInteger(data.rows) && Number.isInteger(data.cols)) {
+            panelConfig.rows = Math.max(1, Math.min(6, data.rows));
+            panelConfig.cols = Math.max(1, Math.min(6, data.cols));
+            panelConfig.assignments = Array.isArray(data.assignments) ? data.assignments : [];
+          }
+        } catch (error) {
+        }
+      }
+
+      function ensurePanelAssignments() {
+        const total = panelConfig.rows * panelConfig.cols;
+        while (panelConfig.assignments.length < total) {
+          panelConfig.assignments.push("");
+        }
+        if (panelConfig.assignments.length > total) {
+          panelConfig.assignments = panelConfig.assignments.slice(0, total);
+        }
+      }
+
+      function buildPanelGrid() {
+        if (!panelGrid) {
+          return;
+        }
+        ensurePanelAssignments();
+        panelGrid.innerHTML = "";
+        panelGrid.style.gridTemplateColumns = `repeat(${panelConfig.cols}, minmax(0, 1fr))`;
+        panelCells = [];
+        panelConfig.assignments.forEach((label, index) => {
+          const cell = document.createElement("div");
+          cell.className = "panel-cell";
+          const labelEl = document.createElement("div");
+          labelEl.className = "panel-label";
+          labelEl.textContent = label || `Cell ${index + 1}`;
+          const valueEl = document.createElement("div");
+          valueEl.className = "panel-value";
+          valueEl.textContent = "--";
+          const gear = document.createElement("button");
+          gear.className = "icon-button panel-gear";
+          gear.type = "button";
+          gear.title = "Settings";
+          gear.innerHTML = "<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8zm9.3 3.4c0-.4 0-.7-.1-1l2-1.6-2-3.4-2.4 1a7.7 7.7 0 0 0-1.7-1l-.3-2.7H9.2l-.3 2.7c-.6.3-1.2.6-1.7 1l-2.4-1-2 3.4 2 1.6c-.1.3-.1.7-.1 1s0 .7.1 1l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1l.3 2.7h7.6l.3-2.7c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4-2-1.6c.1-.3.1-.7.1-1z'/></svg>";
+          gear.addEventListener("click", () => openCellOptions(index));
+          cell.appendChild(labelEl);
+          cell.appendChild(valueEl);
+          cell.appendChild(gear);
+          panelGrid.appendChild(cell);
+          panelCells.push({ labelEl, valueEl });
+        });
+        if (lastSample) {
+          updatePanelValues(lastSample);
+        }
+      }
+
+      function openPanelSettings() {
+        if (!panelOverlay) {
+          return;
+        }
+        panelRows.value = panelConfig.rows;
+        panelCols.value = panelConfig.cols;
+        panelOverlay.classList.add("active");
+      }
+
+      function closePanelSettings() {
+        if (!panelOverlay) {
+          return;
+        }
+        panelOverlay.classList.remove("active");
+      }
+
+      function applyPanelSettings() {
+        const rows = Number(panelRows.value);
+        const cols = Number(panelCols.value);
+        if (Number.isInteger(rows) && rows > 0) {
+          panelConfig.rows = Math.max(1, Math.min(6, rows));
+        }
+        if (Number.isInteger(cols) && cols > 0) {
+          panelConfig.cols = Math.max(1, Math.min(6, cols));
+        }
+        ensurePanelAssignments();
+        savePanelConfig();
+        buildPanelGrid();
+        closePanelSettings();
+      }
+
+      function updatePanelValues(sample) {
+        if (!panelCells.length || !sample) {
+          return;
+        }
+        panelConfig.assignments.forEach((label, index) => {
+          const cell = panelCells[index];
+          if (!cell) {
+            return;
+          }
+          cell.labelEl.textContent = label || `Cell ${index + 1}`;
+          if (!label || !labelIndexMap.has(label)) {
+            cell.valueEl.textContent = "--";
+            return;
+          }
+          const value = sample.values[labelIndexMap.get(label)];
+          cell.valueEl.textContent = formatValue(value, label);
+        });
+      }
+
+      function openCellOptions(index) {
+        if (!cellOverlay || !cellSelect) {
+          return;
+        }
+        activePanelCellIndex = index;
+        if (cellTitle) {
+          cellTitle.textContent = `Cellule ${index + 1}`;
+        }
+        cellSelect.innerHTML = "";
+        const empty = document.createElement("option");
+        empty.value = "";
+        empty.textContent = "(Vide)";
+        cellSelect.appendChild(empty);
+        currentLabels.forEach((label) => {
+          if (hiddenLabels.has(label)) {
+            return;
+          }
+          const option = document.createElement("option");
+          option.value = label;
+          option.textContent = label;
+          cellSelect.appendChild(option);
+        });
+        const current = panelConfig.assignments[index] || "";
+        cellSelect.value = current;
+        cellOverlay.classList.add("active");
+      }
+
+      function closeCellOptions() {
+        if (!cellOverlay) {
+          return;
+        }
+        cellOverlay.classList.remove("active");
+        activePanelCellIndex = null;
+      }
+
+      function applyCellOptions() {
+        if (activePanelCellIndex === null) {
+          return;
+        }
+        const value = cellSelect.value;
+        panelConfig.assignments[activePanelCellIndex] = value;
+        savePanelConfig();
+        buildPanelGrid();
+        closeCellOptions();
+      }
+
       function connect() {
         const source = new EventSource("/stream");
         setStatus("Connecting...", "warn");
@@ -285,8 +1085,12 @@
         });
 
         source.addEventListener("sample", (event) => {
+          if (simulateOn) {
+            return;
+          }
           const sample = JSON.parse(event.data);
           updateValues(sample);
+          sampleCount += 1;
         });
 
         source.addEventListener("error", () => {
@@ -294,10 +1098,102 @@
         });
       }
 
+      loadHiddenLabels();
+      loadValueDecimals();
+      loadPanelConfig();
+      buildPanelGrid();
       connect();
       fetchStatus();
       setInterval(fetchStatus, 3000);
       connectButton.addEventListener("click", requestConnect);
+      if (simulateButton) {
+        simulateButton.addEventListener("click", toggleSimulation);
+      }
+      if (optionsButton) {
+        optionsButton.addEventListener("click", openOptions);
+      }
+      if (optionsClose) {
+        optionsClose.addEventListener("click", closeOptions);
+      }
+      if (optionsOverlay) {
+        optionsOverlay.addEventListener("click", (event) => {
+          if (event.target === optionsOverlay) {
+            closeOptions();
+          }
+        });
+      }
+      if (optionsShowAll) {
+        optionsShowAll.addEventListener("click", showAllOptions);
+      }
+      if (optionsHideAll) {
+        optionsHideAll.addEventListener("click", hideAllOptions);
+      }
+      if (valueSave) {
+        valueSave.addEventListener("click", applyValueOptions);
+      }
+      if (valueClear) {
+        valueClear.addEventListener("click", resetValueOptions);
+      }
+      if (valueClose) {
+        valueClose.addEventListener("click", closeValueOptions);
+      }
+      if (valueOverlay) {
+        valueOverlay.addEventListener("click", (event) => {
+          if (event.target === valueOverlay) {
+            closeValueOptions();
+          }
+        });
+      }
+      if (panelSettings) {
+        panelSettings.addEventListener("click", openPanelSettings);
+      }
+      if (panelApply) {
+        panelApply.addEventListener("click", applyPanelSettings);
+      }
+      if (panelClose) {
+        panelClose.addEventListener("click", closePanelSettings);
+      }
+      if (panelOverlay) {
+        panelOverlay.addEventListener("click", (event) => {
+          if (event.target === panelOverlay) {
+            closePanelSettings();
+          }
+        });
+      }
+      if (cellApply) {
+        cellApply.addEventListener("click", applyCellOptions);
+      }
+      if (cellClose) {
+        cellClose.addEventListener("click", closeCellOptions);
+      }
+      if (cellOverlay) {
+        cellOverlay.addEventListener("click", (event) => {
+          if (event.target === cellOverlay) {
+            closeCellOptions();
+          }
+        });
+      }
+
+      setInterval(() => {
+        const now = performance.now();
+        const elapsed = now - lastHzTime;
+        if (elapsed >= 1000) {
+          const hz = (sampleCount / (elapsed / 1000)).toFixed(1);
+          statusHz.textContent = `Hz: ${hz}`;
+          sampleCount = 0;
+          lastHzTime = now;
+        }
+      }, 250);
+
+      tabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+          const target = tab.dataset.tab;
+          tabs.forEach((btn) => btn.classList.toggle("active", btn === tab));
+          panels.forEach((panel) =>
+            panel.classList.toggle("active", panel.dataset.panel === target)
+          );
+        });
+      });
     </script>
   </body>
 </html>
