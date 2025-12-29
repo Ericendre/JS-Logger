@@ -19,7 +19,7 @@ from gkbus.protocol.kwp2000.commands import StartDiagnosticSession
 from gkbus.protocol.kwp2000.enums import DiagnosticSession
 
 from ecu_definitions import BAUDRATES, AccessLevel
-from flasher.ecu import DesiredBaudrate, enable_security_access
+from flasher.ecu import DesiredBaudrate, calculate_key
 from flasher.logging import data_sources, grab, convert
 from gkflasher import initialize_bus, cli_identify_ecu
 
@@ -125,7 +125,7 @@ def setup_ecu(config: dict, args: argparse.Namespace):
         print("[!] Not supported on this ECU!")
 
     print("[*] Security Access")
-    enable_security_access(bus)
+    enable_security_access_compat(bus)
 
     ecu = cli_identify_ecu(bus)
     if not ecu:
@@ -137,6 +137,23 @@ def setup_ecu(config: dict, args: argparse.Namespace):
 
     ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
     return bus, ecu
+
+
+def enable_security_access_compat(bus: kwp2000.Kwp2000Protocol) -> None:
+    seed = bus.execute(kwp2000.commands.SecurityAccess().request_seed()).get_data()[1:]
+
+    if sum(seed) == 0:
+        return
+
+    key_int = calculate_key(int.from_bytes(seed, "big"))
+    key_bytes = key_int.to_bytes(2, "big")
+
+    try:
+        bus.execute(kwp2000.commands.SecurityAccess().send_key(key_bytes))
+    except AttributeError as exc:
+        if "to_bytes" not in str(exc):
+            raise
+        bus.execute(kwp2000.commands.SecurityAccess().send_key(key_int))
 
 
 class LogState:
