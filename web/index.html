@@ -279,13 +279,29 @@
       }
 
       .panel-label {
-        font-size: 11px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 22px;
+        font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.08em;
+        letter-spacing: 0.06em;
         color: var(--muted);
       }
 
+      .panel-dot {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        display: inline-block;
+        background: rgba(255, 255, 255, 0.2);
+        box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+      }
+
       .panel-value {
+        flex: 1;
+        display: flex;
+        align-items: flex-end;
         font-size: clamp(48px, 9vw, 96px);
         font-weight: 700;
         color: #ffffff;
@@ -598,6 +614,17 @@
       let currentLabels = [];
       let simulateOn = false;
       let simulateTimer = null;
+      const simState = {
+        t: 0,
+        speed: 0,
+        rpm: 800,
+        load: 0.2,
+        coolant: 70,
+        oil: 65,
+        intake: 25,
+        voltage: 13.6,
+        fuelTrim: 0,
+      };
       const hiddenLabels = new Set();
       const hiddenStorageKey = "gkflasher.hiddenLabels";
       const aliasMap = new Map();
@@ -615,6 +642,7 @@
       const historyWindowMs = 30000;
       const historySeries = new Map();
       let historyChart = null;
+      const chartColors = ["#f39c12", "#2ecc71", "#3498db", "#e74c3c", "#9b59b6", "#1abc9c", "#f1c40f"];
       let chartPaused = false;
       let viewWindowMs = historyWindowMs;
       let sliderValue = 0;
@@ -750,57 +778,76 @@
         return Number(value.toFixed(decimals));
       }
 
+      function clamp(value, min, max) {
+        return Math.min(max, Math.max(min, value));
+      }
+
+      function updateSimState() {
+        simState.t += 0.2;
+        const wave = Math.sin(simState.t / 3);
+        const accel = clamp((wave + 1) / 2, 0, 1);
+        const targetSpeed = accel * 120;
+        simState.speed += (targetSpeed - simState.speed) * 0.08;
+        simState.load = clamp(0.2 + accel * 0.7 + Math.sin(simState.t / 7) * 0.05, 0.1, 1);
+        simState.rpm = clamp(800 + simState.speed * 35 + accel * 1200, 750, 6500);
+        simState.coolant = clamp(simState.coolant + (simState.load * 0.02) - 0.005, 70, 102);
+        simState.oil = clamp(simState.oil + (simState.load * 0.015) - 0.003, 65, 115);
+        simState.intake = clamp(20 + simState.load * 15 + Math.sin(simState.t / 5) * 2, 18, 50);
+        simState.voltage = clamp(13.4 + Math.sin(simState.t / 4) * 0.2, 12.6, 14.6);
+        simState.fuelTrim = clamp(Math.sin(simState.t / 6) * 6, -12, 12);
+      }
+
       function generateValue(label) {
         const name = label.toLowerCase();
-        if (name.includes("rpm")) {
-          return randomInRange(700, 6500, 0);
+        if (name.includes("rpm") || name.includes("engine speed")) {
+          return Math.round(simState.rpm);
         }
-        if (name.includes("speed")) {
-          return randomInRange(0, 220, 0);
+        if (name.includes("vehicle speed") || name.includes("speed")) {
+          return Math.round(simState.speed);
         }
         if (name.includes("coolant")) {
-          return randomInRange(70, 105, 1);
+          return Number(simState.coolant.toFixed(1));
         }
         if (name.includes("oil")) {
-          return randomInRange(60, 130, 1);
+          return Number(simState.oil.toFixed(1));
         }
         if (name.includes("intake")) {
-          return randomInRange(10, 50, 1);
+          return Number(simState.intake.toFixed(1));
         }
         if (name.includes("temperature") || name.includes("temp")) {
-          return randomInRange(20, 110, 1);
+          return Number((25 + simState.load * 30).toFixed(1));
         }
         if (name.includes("voltage") || name.includes("battery") || name.includes("(v)")) {
-          return randomInRange(11.8, 14.6, 2);
+          return Number(simState.voltage.toFixed(2));
         }
         if (name.includes("oxygen") || name.includes("mv")) {
-          return randomInRange(0, 1000, 0);
+          return Math.round(100 + simState.load * 700 + Math.sin(simState.t * 3) * 50);
         }
         if (name.includes("throttle") || name.includes("position")) {
-          return randomInRange(0, 100, 1);
+          return Number((simState.load * 80).toFixed(1));
         }
         if (name.includes("duty") || name.includes("%")) {
-          return randomInRange(0, 100, 1);
+          return Number((simState.load * 100).toFixed(1));
         }
         if (name.includes("ms")) {
-          return randomInRange(0, 20, 2);
+          return Number((simState.load * 8 + 1).toFixed(2));
         }
         if (name.includes("pressure")) {
-          return randomInRange(0, 100, 1);
+          return Number((20 + simState.load * 60).toFixed(1));
         }
         if (name.includes("status") || name.includes("switch") || name.includes("relay") || name.includes("signal")) {
-          return Math.random() > 0.7 ? 1 : 0;
+          return simState.speed > 2 ? 1 : 0;
         }
         if (name.includes("trim")) {
-          return randomInRange(-15, 15, 1);
+          return Number(simState.fuelTrim.toFixed(1));
         }
         if (name.includes("ignition")) {
-          return randomInRange(-10, 40, 1);
+          return Number((10 + simState.load * 18 + Math.sin(simState.t / 4) * 2).toFixed(1));
         }
         if (name.includes("camshaft") || name.includes("cvvt")) {
-          return randomInRange(0, 80, 1);
+          return Number((20 + simState.load * 40).toFixed(1));
         }
-        return randomInRange(0, 255, 0);
+        return Number((simState.load * 100).toFixed(1));
       }
 
       function startSimulation() {
@@ -812,6 +859,7 @@
         simulateButton.textContent = "Stop simulation";
         setStatus("Simulation", "warn");
         simulateTimer = setInterval(() => {
+          updateSimState();
           const values = currentLabels.map(generateValue);
           updateValues({ ts: Date.now(), values });
           sampleCount += 1;
@@ -1094,7 +1142,14 @@
           cell.className = "panel-cell";
           const labelEl = document.createElement("div");
           labelEl.className = "panel-label";
-          labelEl.textContent = label ? displayName(label) : `Cell ${index + 1}`;
+          const dotEl = document.createElement("span");
+          dotEl.className = "panel-dot";
+          dotEl.style.background = label ? getLabelColor(label) : "rgba(255, 255, 255, 0.25)";
+          dotEl.style.boxShadow = label ? `0 0 8px ${getLabelColor(label)}` : "none";
+          const textEl = document.createElement("span");
+          textEl.textContent = label ? displayName(label) : `Cell ${index + 1}`;
+          labelEl.appendChild(dotEl);
+          labelEl.appendChild(textEl);
           const valueEl = document.createElement("div");
           valueEl.className = "panel-value";
           valueEl.textContent = "--";
@@ -1156,7 +1211,15 @@
           if (!cell) {
             return;
           }
-          cell.labelEl.textContent = label ? displayName(label) : `Cell ${index + 1}`;
+          const dotEl = cell.labelEl.querySelector(".panel-dot");
+          const textEl = cell.labelEl.querySelector("span:last-child");
+          if (dotEl) {
+            dotEl.style.background = label ? getLabelColor(label) : "rgba(255, 255, 255, 0.25)";
+            dotEl.style.boxShadow = label ? `0 0 8px ${getLabelColor(label)}` : "none";
+          }
+          if (textEl) {
+            textEl.textContent = label ? displayName(label) : `Cell ${index + 1}`;
+          }
           if (!label || !labelIndexMap.has(label)) {
             cell.valueEl.textContent = "--";
             return;
@@ -1210,6 +1273,15 @@
         savePanelConfig();
         buildPanelGrid();
         closeCellOptions();
+      }
+
+      function getLabelColor(label) {
+        const labels = getPanelLabels();
+        const idx = labels.indexOf(label);
+        if (idx === -1) {
+          return "rgba(255, 255, 255, 0.25)";
+        }
+        return chartColors[idx % chartColors.length];
       }
 
       function getPanelLabels() {
@@ -1292,7 +1364,6 @@
         if (!chartCanvas || !window.Chart) {
           return;
         }
-        const colors = ["#f39c12", "#2ecc71", "#3498db", "#e74c3c", "#9b59b6", "#1abc9c", "#f1c40f"];
         const externalTooltipHandler = (context) => {
           if (!chartTooltip) {
             return;
@@ -1376,7 +1447,7 @@
           plugins: [verticalLine],
         });
 
-        historyChart._colors = colors;
+        historyChart._colors = chartColors;
         syncHistoryDatasets();
       }
 
