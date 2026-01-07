@@ -125,7 +125,7 @@ void lireCapteurs(SensorData &out) {
   const float v_min = 0.0f;
   const float v_max = 2.83f;
 
-  float afr = 0.7 + afr_min +
+  float afr = (-0.7) + afr_min +
               (voltage - v_min) * (afr_max - afr_min) / (v_max - v_min);
   if (afr < afr_min) afr = afr_min;
   if (afr > afr_max) afr = afr_max;
