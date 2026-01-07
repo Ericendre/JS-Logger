@@ -4,13 +4,11 @@
 constexpr int PIN_SCK = 4;
 constexpr int PIN_CS = 7;
 constexpr int PIN_MISO = 5;
-constexpr int PIN_CS_2 = 8;
+constexpr int PIN_OIL_PRESSURE = A1;
 
 Adafruit_MAX31855 thermocouple(PIN_SCK, PIN_CS, PIN_MISO);
-Adafruit_MAX31855 thermocouple2(PIN_SCK, PIN_CS_2, PIN_MISO);
 
 constexpr unsigned long LOG_INTERVAL_MS = 500;
-constexpr unsigned long GUARD_TIME_MS = 50;
 
 using TaskFn = void (*)();
 struct Task {
@@ -20,18 +18,17 @@ struct Task {
 };
 
 void logEgt();
+void logOilPressure();
 
 Task tasks[] = {
   {logEgt, LOG_INTERVAL_MS, 0},
+  {logOilPressure, LOG_INTERVAL_MS, 0},
 };
 constexpr size_t TASK_COUNT = sizeof(tasks) / sizeof(tasks[0]);
 
 void setup() {
   pinMode(PIN_CS, OUTPUT);
   digitalWrite(PIN_CS, HIGH);
-  pinMode(PIN_CS_2, OUTPUT);
-  digitalWrite(PIN_CS_2, HIGH);
-
   Serial.begin(115200);
   delay(250);
   Serial.println("MAX31855 init...");
@@ -50,7 +47,6 @@ void loop() {
 
 void logEgt() {
   digitalWrite(PIN_CS, HIGH);
-  digitalWrite(PIN_CS_2, HIGH);
 
   double celsius = thermocouple.readCelsius();
   if (isnan(celsius)) {
@@ -69,22 +65,13 @@ void logEgt() {
     Serial.println(celsius, 2);
   }
 
-  delay(GUARD_TIME_MS);
-
-  double celsius2 = thermocouple2.readCelsius();
-  if (isnan(celsius2)) {
-    uint8_t fault = thermocouple2.readError();
-    if (fault == 0x02) {
-      return; // ignore short to GND
-    }
-    fault &= ~0x02;
-    if (fault == 0) {
-      return;
-    }
-    Serial.print("Fault MAX31855 #2: 0x");
-    Serial.println(fault, HEX);
-  } else {
-    Serial.print("EGT2 (C): ");
-    Serial.println(celsius2, 2);
-  }
 }
+
+void logOilPressure() {
+  int oilPressureRaw = analogRead(PIN_OIL_PRESSURE);
+  double vAdc = (static_cast<double>(oilPressureRaw) * 5) / 4095.0;
+  double bar = (vAdc - 1.2)*3.5518;
+  Serial.print("Oil pressure (bar): ");
+  Serial.println(bar, 3);
+}
+

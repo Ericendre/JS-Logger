@@ -150,6 +150,12 @@
         margin-bottom: 12px;
       }
 
+      .panel-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
       .overlay {
         position: fixed;
         inset: 0;
@@ -271,6 +277,7 @@
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.2s ease;
+        z-index: 3;
       }
 
       .panel-cell:hover .panel-gear {
@@ -287,6 +294,9 @@
         text-transform: uppercase;
         letter-spacing: 0.06em;
         color: var(--muted);
+        pointer-events: auto;
+        position: relative;
+        z-index: 1;
       }
 
       .panel-dot {
@@ -296,6 +306,13 @@
         display: inline-block;
         background: rgba(255, 255, 255, 0.2);
         box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+        pointer-events: auto;
+        cursor: pointer;
+        z-index: 2;
+      }
+
+      .panel-label span:last-child {
+        pointer-events: none;
       }
 
       .panel-value {
@@ -442,9 +459,11 @@
           <span class="dot" id="status-dot"></span>
           <span id="status-text">Connecting...</span>
           <span id="status-hz">Hz: --</span>
+          <span id="ble-status">BLE: off</span>
         </div>
         <div class="controls">
           <button class="button" id="connect-button">Connect ECU</button>
+          <button class="button" id="ble-connect-button">Connect BLE</button>
         </div>
       </div>
     </header>
@@ -477,7 +496,10 @@
       <div class="card tab-panel active" data-panel="raw">
         <div class="panel-header">
           <strong>Raw data</strong>
-          <button class="button" id="options-button">Options</button>
+          <div class="panel-actions">
+            <button class="button" id="options-button">Options</button>
+            <button class="button" id="ble-log-button">BLE log</button>
+          </div>
         </div>
         <table>
           <thead>
@@ -510,6 +532,15 @@
           <button class="button" id="options-show-all">Tout afficher</button>
           <button class="button" id="options-hide-all">Tout cacher</button>
         </div>
+      </div>
+    </div>
+    <div class="overlay" id="ble-log-overlay">
+      <div class="overlay-card">
+        <div class="panel-header">
+          <strong>BLE log</strong>
+          <button class="button" id="ble-log-close">Fermer</button>
+        </div>
+        <pre id="ble-log-content" style="margin: 0; min-height: 200px; max-height: 60vh; overflow: auto; background: rgba(255, 255, 255, 0.06); padding: 12px; border-radius: 12px;">Aucun log pour l'instant.</pre>
       </div>
     </div>
     <div class="overlay" id="value-overlay">
@@ -574,6 +605,8 @@
       const statusHz = document.getElementById("status-hz");
       const timestampEl = document.getElementById("timestamp");
       const connectButton = document.getElementById("connect-button");
+      const bleConnectButton = document.getElementById("ble-connect-button");
+      const bleStatus = document.getElementById("ble-status");
       const simulateButton = document.getElementById("simulate-button");
       const optionsButton = document.getElementById("options-button");
       const optionsOverlay = document.getElementById("options-overlay");
@@ -581,6 +614,10 @@
       const optionsClose = document.getElementById("options-close");
       const optionsShowAll = document.getElementById("options-show-all");
       const optionsHideAll = document.getElementById("options-hide-all");
+      const bleLogButton = document.getElementById("ble-log-button");
+      const bleLogOverlay = document.getElementById("ble-log-overlay");
+      const bleLogClose = document.getElementById("ble-log-close");
+      const bleLogContent = document.getElementById("ble-log-content");
       const valueOverlay = document.getElementById("value-overlay");
       const valueTitle = document.getElementById("value-title");
       const valueDecimals = document.getElementById("value-decimals");
@@ -612,6 +649,9 @@
       let sampleCount = 0;
       let lastHzTime = performance.now();
       let currentLabels = [];
+      let baseLabels = [];
+      const bleExtraLabels = [];
+      const bleExtraValues = new Map();
       let simulateOn = false;
       let simulateTimer = null;
       const simState = {
@@ -641,11 +681,257 @@
       let activePanelCellIndex = null;
       const historyWindowMs = 30000;
       const historySeries = new Map();
+      const hiddenSeries = new Set();
+      const hiddenSeriesKey = "gkflasher.hiddenSeries";
+      const chartColorMap = new Map();
       let historyChart = null;
       const chartColors = ["#f39c12", "#2ecc71", "#3498db", "#e74c3c", "#9b59b6", "#1abc9c", "#f1c40f"];
       let chartPaused = false;
       let viewWindowMs = historyWindowMs;
       let sliderValue = 0;
+
+      const engineDisplacementL = 1.975;
+      const engineCylinders = 4;
+      const airDensityGPerL = 1.184;
+
+      const computedDefs = [
+        {
+          label: "MAF (mg/stroke)",
+          compute: (labels, values) => {
+            const mafIndex = findIndexByContains(labels, ["air flow rate from mass air flow sensor", "maf"], "kg/h");
+            const rpmIndex = findIndexByContains(labels, ["engine speed", "rpm"], "rpm");
+            if (mafIndex === -1 || rpmIndex === -1) {
+              return null;
+            }
+            const mafKgH = Number(values[mafIndex]);
+            const rpm = Number(values[rpmIndex]);
+            if (!Number.isFinite(mafKgH) || !Number.isFinite(rpm) || rpm <= 0) {
+              return null;
+            }
+            const gPerSec = (mafKgH * 1000) / 3600;
+            const strokesPerSecPerCyl = (rpm / 60) / 2;
+            const totalStrokesPerSec = strokesPerSecPerCyl * engineCylinders;
+            if (totalStrokesPerSec <= 0) {
+              return null;
+            }
+            return (gPerSec / totalStrokesPerSec) * 1000;
+          },
+        },
+        {
+          label: "VE (%)",
+          compute: (labels, values) => {
+            const mafIndex = findIndexByContains(labels, ["air flow rate from mass air flow sensor", "maf"], "kg/h");
+            const rpmIndex = findIndexByContains(labels, ["engine speed", "rpm"], "rpm");
+            if (mafIndex === -1 || rpmIndex === -1) {
+              return null;
+            }
+            const mafKgH = Number(values[mafIndex]);
+            const rpm = Number(values[rpmIndex]);
+            if (!Number.isFinite(mafKgH) || !Number.isFinite(rpm) || rpm <= 0) {
+              return null;
+            }
+            const gPerSec = (mafKgH * 1000) / 3600;
+            const strokesPerSecPerCyl = (rpm / 60) / 2;
+            const totalStrokesPerSec = strokesPerSecPerCyl * engineCylinders;
+            if (totalStrokesPerSec <= 0) {
+              return null;
+            }
+            const mgPerStroke = (gPerSec / totalStrokesPerSec) * 1000;
+            const iatIndex = findIndexByContains(labels, ["intake air temperature", "iat"], "c");
+            let densityGPerL = airDensityGPerL;
+            if (iatIndex !== -1) {
+              const iatC = Number(values[iatIndex]);
+              const rhoKgM3 = airDensityFromIat(iatC);
+              if (rhoKgM3) {
+                densityGPerL = rhoKgM3;
+              }
+            }
+            const mgAt100 = (engineDisplacementL / engineCylinders) * densityGPerL * 1000;
+            if (mgAt100 <= 0) {
+              return null;
+            }
+            return (mgPerStroke / mgAt100) * 100;
+          },
+        },
+      ];
+
+      function airDensityFromIat(iatC) {
+        const tempK = iatC + 273.15;
+        if (!Number.isFinite(tempK) || tempK <= 0) {
+          return null;
+        }
+        const pressurePa = 101325;
+        const R = 287.05;
+        const rhoKgPerM3 = pressurePa / (R * tempK);
+        return rhoKgPerM3; // kg/m^3
+      }
+
+      function findIndexByContains(labels, substrings, unitHint) {
+        for (let i = 0; i < labels.length; i += 1) {
+          const label = labels[i].toLowerCase();
+          const hasUnit = unitHint ? label.includes(`(${unitHint}`) : true;
+          if (!hasUnit) {
+            continue;
+          }
+          for (const token of substrings) {
+            if (label.includes(token)) {
+              return i;
+            }
+          }
+        }
+        return -1;
+      }
+
+      function extendLabels(labels) {
+        const computed = computedDefs.map((def) => def.label);
+        return labels.concat(computed);
+      }
+
+      function setBaseLabels(labels) {
+        baseLabels = Array.isArray(labels) ? labels.slice() : [];
+      }
+
+      function getCombinedLabels() {
+        return baseLabels.concat(bleExtraLabels);
+      }
+
+      function computeDerivedValues(labels, values) {
+        const derived = [];
+        computedDefs.forEach((def) => {
+          const val = def.compute(labels, values);
+          if (val === null) {
+            derived.push("--");
+            return;
+          }
+          if (def.label === "VE (%)") {
+            derived.push(Number(val.toFixed(1)));
+            return;
+          }
+          derived.push(Number(val.toFixed(3)));
+        });
+        return derived;
+      }
+
+      const SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+      const TX_CHAR_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+      let bleDevice = null;
+      let bleServer = null;
+      let bleService = null;
+      let bleTxChar = null;
+      const bleDecoder = new TextDecoder();
+      let bleBuffer = "";
+      const bleLogLines = [];
+      const bleLogMax = 500;
+
+      function appendBleLog(line) {
+        if (!bleLogContent) {
+          return;
+        }
+        if (!line) {
+          return;
+        }
+        bleLogLines.push(line);
+        if (bleLogLines.length > bleLogMax) {
+          bleLogLines.splice(0, bleLogLines.length - bleLogMax);
+        }
+        bleLogContent.textContent = bleLogLines.join("\n");
+        bleLogContent.scrollTop = bleLogContent.scrollHeight;
+      }
+
+      function onBleNotify(event) {
+        const data = event.target.value;
+        if (!data) {
+          return;
+        }
+        bleBuffer += bleDecoder.decode(data, { stream: true });
+        let idx = 0;
+        while ((idx = bleBuffer.indexOf("\n")) >= 0) {
+          const line = bleBuffer.slice(0, idx).trim();
+          bleBuffer = bleBuffer.slice(idx + 1);
+          if (line) {
+            appendBleLog(line);
+            handleBleLogLine(line);
+          }
+        }
+      }
+
+
+      function handleBleLogLine(line) {
+        const match = line.match(/^\s*([^:]+?)\s*:\s*([-+]?\d+(?:\.\d+)?)/);
+        if (!match) {
+          return;
+        }
+        const label = match[1].trim();
+        const value = Number(match[2]);
+        if (!label || !Number.isFinite(value)) {
+          return;
+        }
+        const isNew = !bleExtraValues.has(label);
+        bleExtraValues.set(label, value);
+        if (isNew) {
+          bleExtraLabels.push(label);
+          buildTable(extendLabels(getCombinedLabels()));
+          return;
+        }
+        const cell = valueCellMap.get(label);
+        if (cell) {
+          cell.textContent = formatValue(value, label);
+        }
+        const idx = labelIndexMap.get(label);
+        if (lastSample && idx !== undefined) {
+          lastSample.values[idx] = value;
+          updatePanelValues(lastSample);
+        }
+      }
+
+      function setBleStatus(textValue) {
+        if (bleStatus) {
+          bleStatus.textContent = `BLE: ${textValue}`;
+        }
+      }
+
+      function setBleUiConnected(connected) {
+        if (bleConnectButton) {
+          bleConnectButton.textContent = connected ? "Disconnect BLE" : "Connect BLE";
+        }
+      }
+
+      async function connectBle() {
+        if (!navigator.bluetooth) {
+          setBleStatus("unsupported");
+          return;
+        }
+        if (bleDevice && bleDevice.gatt && bleDevice.gatt.connected) {
+          bleDevice.gatt.disconnect();
+          setBleStatus("off");
+          setBleUiConnected(false);
+          return;
+        }
+        try {
+          setBleStatus("search...");
+          bleDevice = await navigator.bluetooth.requestDevice({
+            filters: [{ namePrefix: "ESP32" }],
+            optionalServices: [SERVICE_UUID],
+          });
+          bleDevice.addEventListener("gattserverdisconnected", () => {
+            setBleStatus("off");
+            setBleUiConnected(false);
+          });
+          bleServer = await bleDevice.gatt.connect();
+          bleService = await bleServer.getPrimaryService(SERVICE_UUID);
+          bleTxChar = await bleService.getCharacteristic(TX_CHAR_UUID);
+          await bleTxChar.startNotifications();
+          bleTxChar.addEventListener("characteristicvaluechanged", onBleNotify);
+          setBleStatus("connected");
+          setBleUiConnected(true);
+          if (simulateOn) {
+            stopSimulation();
+          }
+        } catch (error) {
+          setBleStatus("error");
+          setBleUiConnected(false);
+        }
+      }
 
       function setStatus(text, state) {
         statusText.textContent = text;
@@ -720,19 +1006,24 @@
         if (!labelsReady) {
           return;
         }
-        lastSample = sample;
+        const combinedLabels = getCombinedLabels();
+        const bleValues = bleExtraLabels.map((label) => bleExtraValues.get(label) ?? "--");
+        const combinedValues = sample.values.concat(bleValues);
+        const derived = computeDerivedValues(combinedLabels, combinedValues);
+        const extendedSample = { ts: sample.ts, values: combinedValues.concat(derived) };
+        lastSample = extendedSample;
         currentLabels.forEach((label, index) => {
           const cell = valueCellMap.get(label);
           if (!cell) {
             return;
           }
-          const value = sample.values[index];
+          const value = extendedSample.values[index];
           cell.textContent = formatValue(value, label);
         });
         const date = new Date(sample.ts);
         timestampEl.textContent = `Last update: ${date.toLocaleTimeString()}`;
-        updatePanelValues(sample);
-        updateHistoryChart(sample);
+        updatePanelValues(extendedSample);
+        updateHistoryChart(extendedSample);
       }
 
       async function fetchStatus() {
@@ -860,7 +1151,8 @@
         setStatus("Simulation", "warn");
         simulateTimer = setInterval(() => {
           updateSimState();
-          const values = currentLabels.map(generateValue);
+          const labels = baseLabels.length ? baseLabels : currentLabels;
+          const values = labels.map(generateValue);
           updateValues({ ts: Date.now(), values });
           sampleCount += 1;
         }, 200);
@@ -1142,10 +1434,14 @@
           cell.className = "panel-cell";
           const labelEl = document.createElement("div");
           labelEl.className = "panel-label";
+          if (label) {
+            labelEl.dataset.label = label;
+          }
           const dotEl = document.createElement("span");
           dotEl.className = "panel-dot";
           dotEl.style.background = label ? getLabelColor(label) : "rgba(255, 255, 255, 0.25)";
           dotEl.style.boxShadow = label ? `0 0 8px ${getLabelColor(label)}` : "none";
+          dotEl.style.opacity = label && isSeriesHidden(label) ? "0.25" : "1";
           const textEl = document.createElement("span");
           textEl.textContent = label ? displayName(label) : `Cell ${index + 1}`;
           labelEl.appendChild(dotEl);
@@ -1216,6 +1512,7 @@
           if (dotEl) {
             dotEl.style.background = label ? getLabelColor(label) : "rgba(255, 255, 255, 0.25)";
             dotEl.style.boxShadow = label ? `0 0 8px ${getLabelColor(label)}` : "none";
+            dotEl.style.opacity = label && isSeriesHidden(label) ? "0.25" : "1";
           }
           if (textEl) {
             textEl.textContent = label ? displayName(label) : `Cell ${index + 1}`;
@@ -1275,13 +1572,68 @@
         closeCellOptions();
       }
 
-      function getLabelColor(label) {
-        const labels = getPanelLabels();
-        const idx = labels.indexOf(label);
-        if (idx === -1) {
+      function hashLabel(label) {
+        let hash = 0;
+        for (let i = 0; i < label.length; i += 1) {
+          hash = (hash << 5) - hash + label.charCodeAt(i);
+          hash |= 0;
+        }
+        return Math.abs(hash);
+      }
+
+            function getLabelColor(label) {
+        if (!label) {
           return "rgba(255, 255, 255, 0.25)";
         }
-        return chartColors[idx % chartColors.length];
+        if (chartColorMap.has(label)) {
+          return chartColorMap.get(label);
+        }
+        return "rgba(255, 255, 255, 0.25)";
+      }
+
+      function isRpmLabel(label) {
+        const name = label.toLowerCase();
+        return name.includes("rpm") || name.includes("engine speed");
+      }
+
+      function saveHiddenSeries() {
+        try {
+          localStorage.setItem(hiddenSeriesKey, JSON.stringify(Array.from(hiddenSeries.values())));
+        } catch (error) {
+        }
+      }
+
+      function loadHiddenSeries() {
+        try {
+          const raw = localStorage.getItem(hiddenSeriesKey);
+          if (!raw) {
+            return;
+          }
+          const items = JSON.parse(raw);
+          if (Array.isArray(items)) {
+            hiddenSeries.clear();
+            items.forEach((item) => {
+              if (typeof item === "string") {
+                hiddenSeries.add(item);
+              }
+            });
+          }
+        } catch (error) {
+        }
+      }
+
+      function isSeriesHidden(label) {
+        return hiddenSeries.has(label);
+      }
+
+      function toggleSeries(label) {
+        if (hiddenSeries.has(label)) {
+          hiddenSeries.delete(label);
+        } else {
+          hiddenSeries.add(label);
+        }
+        saveHiddenSeries();
+        syncHistoryDatasets();
       }
 
       function getPanelLabels() {
@@ -1442,6 +1794,11 @@
                 grid: { color: "rgba(255,255,255,0.05)" },
                 ticks: { color: "rgba(255,255,255,0.6)" },
               },
+              y2: {
+                position: "right",
+                grid: { drawOnChartArea: false },
+                ticks: { color: "rgba(255,255,255,0.6)" },
+              },
             },
           },
           plugins: [verticalLine],
@@ -1449,6 +1806,19 @@
 
         historyChart._colors = chartColors;
         syncHistoryDatasets();
+      }
+
+      function refreshPanelDots() {
+        panelCells.forEach((cell) => {
+          const label = cell.labelEl.dataset.label;
+          const dotEl = cell.labelEl.querySelector(".panel-dot");
+          if (!dotEl) {
+            return;
+          }
+          dotEl.style.background = label ? getLabelColor(label) : "rgba(255, 255, 255, 0.25)";
+          dotEl.style.boxShadow = label ? `0 0 8px ${getLabelColor(label)}` : "none";
+          dotEl.style.opacity = label && isSeriesHidden(label) ? "0.25" : "1";
+        });
       }
 
       function syncHistoryDatasets() {
@@ -1460,8 +1830,11 @@
         }
         const labels = getPanelLabels();
         ensureHistorySeries(labels);
-        historyChart.data.datasets = labels.map((label, index) => {
+        const visibleLabels = labels.filter((label) => !isSeriesHidden(label));
+        chartColorMap.clear();
+        historyChart.data.datasets = visibleLabels.map((label, index) => {
           const color = historyChart._colors[index % historyChart._colors.length];
+          chartColorMap.set(label, color);
           return {
             label: displayName(label),
             data: historySeries.get(label) || [],
@@ -1470,10 +1843,13 @@
             borderWidth: 2,
             tension: 0.25,
             pointRadius: 0,
+            yAxisID: isRpmLabel(label) ? "y2" : "y",
+            hidden: isSeriesHidden(label),
           };
         });
         updateChartWindow();
         historyChart.update("none");
+        refreshPanelDots();
       }
 
       function updateHistoryChart(sample) {
@@ -1489,6 +1865,9 @@
         const labels = getPanelLabels();
         ensureHistorySeries(labels);
         labels.forEach((label) => {
+          if (isSeriesHidden(label)) {
+            return;
+          }
           const idx = labelIndexMap.get(label);
           if (idx === undefined) {
             return;
@@ -1504,6 +1883,7 @@
         historySeries.forEach((series) => trimSeries(series, sample.ts));
         updateChartWindow();
         historyChart.update("none");
+        refreshPanelDots();
       }
 
       function connect() {
@@ -1512,7 +1892,8 @@
 
         source.addEventListener("labels", (event) => {
           const labels = JSON.parse(event.data);
-          buildTable(labels);
+          setBaseLabels(labels);
+          buildTable(extendLabels(getCombinedLabels()));
         });
 
         source.addEventListener("sample", (event) => {
@@ -1533,6 +1914,7 @@
       loadValueDecimals();
       loadAliasMap();
       loadPanelConfig();
+      loadHiddenSeries();
       buildPanelGrid();
       initHistoryChart();
       connect();
@@ -1541,6 +1923,9 @@
       connectButton.addEventListener("click", requestConnect);
       if (simulateButton) {
         simulateButton.addEventListener("click", toggleSimulation);
+      }
+      if (bleConnectButton) {
+        bleConnectButton.addEventListener("click", connectBle);
       }
       if (optionsButton) {
         optionsButton.addEventListener("click", openOptions);
@@ -1560,6 +1945,27 @@
       }
       if (optionsHideAll) {
         optionsHideAll.addEventListener("click", hideAllOptions);
+      }
+      if (bleLogButton) {
+        bleLogButton.addEventListener("click", () => {
+          if (bleLogOverlay) {
+            bleLogOverlay.classList.add("active");
+          }
+        });
+      }
+      if (bleLogClose) {
+        bleLogClose.addEventListener("click", () => {
+          if (bleLogOverlay) {
+            bleLogOverlay.classList.remove("active");
+          }
+        });
+      }
+      if (bleLogOverlay) {
+        bleLogOverlay.addEventListener("click", (event) => {
+          if (event.target === bleLogOverlay) {
+            bleLogOverlay.classList.remove("active");
+          }
+        });
       }
       if (valueSave) {
         valueSave.addEventListener("click", applyValueOptions);
@@ -1647,6 +2053,19 @@
           lastHzTime = now;
         }
       }, 250);
+
+      document.addEventListener("click", (event) => {
+        const labelEl = event.target.closest(".panel-label");
+        if (!labelEl) {
+          return;
+        }
+        const label = labelEl.dataset.label;
+        if (!label) {
+          return;
+        }
+        toggleSeries(label);
+        buildPanelGrid();
+      });
 
       tabs.forEach((tab) => {
         tab.addEventListener("click", () => {

@@ -1,0 +1,10 @@
+
+Oil Pressure Sensor PSI psi 		0 	34	psi	
+Oil Pressure Sensor Voltage Volts 	0.53 	1.86	v
+
+
+The oil pressure sensor is a silicon based sensing unit that measures the pressure of the engine oil. The
+Powertrain Control Module (PCM) supplies a 5 volt reference and a ground to the sensor. The input to the
+PCM occurs on the signal return circuit. The oil pressure sensor is a linear sensor; as pressure changes,
+voltage changes proportionately and returns a voltage signal to the PCM that reflects oil pressure. The
+zero pressure reading is 0.5 volt and full scale is 4.5 volt.
