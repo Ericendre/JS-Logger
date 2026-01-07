@@ -28,6 +28,8 @@ struct SensorData {
 
 SensorData g_latest_data;
 uint32_t g_next_read_us = 0;
+float g_afr_ema = 0.0f;
+bool g_afr_ema_init = false;
 
 class ServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer *pServer) override {
@@ -103,20 +105,33 @@ bool timeToRead(uint32_t now_us) {
   return static_cast<int32_t>(now_us - g_next_read_us) >= 0;
 }
 
+float filtreExponentiel(float input, float alpha, float &state, bool &initialized) {
+  if (!initialized) {
+    state = input;
+    initialized = true;
+    return state;
+  }
+
+  state = alpha * input + (1.0f - alpha) * state;
+  return state;
+}
+
 void lireCapteurs(SensorData &out) {
   const int raw = analogRead(A0);
   const float vref = 3.3f;
   const float voltage = (static_cast<float>(raw) / 4095.0f) * vref;
   const float afr_min = 10.0f;
   const float afr_max = 18.5f;
-  const float v_min = 1.0f;
-  const float v_max = 1.85f;
+  const float v_min = 0.0f;
+  const float v_max = 2.83f;
 
-  float afr = afr_min +
+  float afr = 0.7 + afr_min +
               (voltage - v_min) * (afr_max - afr_min) / (v_max - v_min);
   if (afr < afr_min) afr = afr_min;
   if (afr > afr_max) afr = afr_max;
-  out.air_fuel_ratio = afr;
+
+  const float afr_smooth = filtreExponentiel(afr, 0.2f, g_afr_ema, g_afr_ema_init);
+  out.air_fuel_ratio = afr_smooth;
 }
 
 void envoyerSerie(const SensorData &data) {

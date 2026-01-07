@@ -557,6 +557,14 @@
           <label for="value-alias">Alias</label>
           <input class="value-input" id="value-alias" type="text" placeholder="Nom court" />
         </div>
+        <div class="overlay-field">
+          <label for="value-scale-min">Echelle min</label>
+          <input class="value-input" id="value-scale-min" type="number" step="0.01" placeholder="auto" />
+        </div>
+        <div class="overlay-field">
+          <label for="value-scale-max">Echelle max</label>
+          <input class="value-input" id="value-scale-max" type="number" step="0.01" placeholder="auto" />
+        </div>
         <div class="overlay-actions">
           <button class="button" id="value-save">Appliquer</button>
           <button class="button" id="value-clear">Auto</button>
@@ -622,6 +630,8 @@
       const valueTitle = document.getElementById("value-title");
       const valueDecimals = document.getElementById("value-decimals");
       const valueAlias = document.getElementById("value-alias");
+      const valueScaleMin = document.getElementById("value-scale-min");
+      const valueScaleMax = document.getElementById("value-scale-max");
       const valueSave = document.getElementById("value-save");
       const valueClear = document.getElementById("value-clear");
       const valueClose = document.getElementById("value-close");
@@ -671,6 +681,8 @@
       const aliasStorageKey = "gkflasher.aliasMap";
       const valueDecimalsMap = new Map();
       const valueStorageKey = "gkflasher.valueDecimals";
+      const valueScaleMap = new Map();
+      const valueScaleKey = "gkflasher.valueScale";
       const valueCellMap = new Map();
       const labelIndexMap = new Map();
       let lastSample = null;
@@ -1184,6 +1196,41 @@
         }
       }
 
+      function saveValueScale() {
+        try {
+          const items = Array.from(valueScaleMap.entries()).map(([label, scale]) => [label, scale.min ?? null, scale.max ?? null]);
+          localStorage.setItem(valueScaleKey, JSON.stringify(items));
+        } catch (error) {
+        }
+      }
+
+      function loadValueScale() {
+        try {
+          const raw = localStorage.getItem(valueScaleKey);
+          if (!raw) {
+            return;
+          }
+          const items = JSON.parse(raw);
+          if (Array.isArray(items)) {
+            valueScaleMap.clear();
+            items.forEach((entry) => {
+              if (!Array.isArray(entry) || entry.length < 3) {
+                return;
+              }
+              const label = entry[0];
+              const min = Number(entry[1]);
+              const max = Number(entry[2]);
+              const hasMin = Number.isFinite(min);
+              const hasMax = Number.isFinite(max);
+              if (typeof label == "string" && (hasMin || hasMax)) {
+                valueScaleMap.set(label, { min: hasMin ? min : null, max: hasMax ? max : null });
+              }
+            });
+          }
+        } catch (error) {
+        }
+      }
+
       function loadValueDecimals() {
         try {
           const raw = localStorage.getItem(valueStorageKey);
@@ -1216,6 +1263,11 @@
         if (valueAlias) {
           valueAlias.value = aliasMap.get(label) || "";
         }
+        if (valueScaleMin && valueScaleMax) {
+          const scale = valueScaleMap.get(label);
+          valueScaleMin.value = scale && Number.isFinite(scale.min) ? String(scale.min) : "";
+          valueScaleMax.value = scale && Number.isFinite(scale.max) ? String(scale.max) : "";
+        }
         valueOverlay.classList.add("active");
       }
 
@@ -1225,6 +1277,18 @@
         }
         valueOverlay.classList.remove("active");
         activeValueLabel = null;
+      }
+
+      function parseNumberInput(raw) {
+        if (typeof raw !== "string") {
+          return null;
+        }
+        const normalized = raw.replace(",", ".").trim();
+        if (!normalized) {
+          return null;
+        }
+        const num = Number(normalized);
+        return Number.isFinite(num) ? num : null;
       }
 
       function applyValueOptions() {
@@ -1241,6 +1305,18 @@
           }
         }
         saveValueDecimals();
+        if (valueScaleMin && valueScaleMax) {
+          const minVal = parseNumberInput(valueScaleMin.value);
+          const maxVal = parseNumberInput(valueScaleMax.value);
+          const hasMin = Number.isFinite(minVal);
+          const hasMax = Number.isFinite(maxVal);
+          if (!hasMin && !hasMax) {
+            valueScaleMap.delete(activeValueLabel);
+          } else {
+            valueScaleMap.set(activeValueLabel, { min: hasMin ? minVal : null, max: hasMax ? maxVal : null });
+          }
+          saveValueScale();
+        }
         if (valueAlias) {
           const aliasValue = valueAlias.value.trim();
           if (aliasValue) {
@@ -1265,6 +1341,12 @@
         valueDecimalsMap.delete(activeValueLabel);
         valueDecimals.value = "";
         saveValueDecimals();
+        if (valueScaleMin && valueScaleMax) {
+          valueScaleMin.value = "";
+          valueScaleMax.value = "";
+          valueScaleMap.delete(activeValueLabel);
+          saveValueScale();
+        }
         if (valueAlias) {
           valueAlias.value = "";
           aliasMap.delete(activeValueLabel);
@@ -1596,6 +1678,69 @@
         return name.includes("rpm") || name.includes("engine speed");
       }
 
+      function isAfrLabel(label) {
+        const name = label.toLowerCase();
+        return name.includes("air/fuel") || name.includes("afr");
+      }
+
+      function applyFixedScales() {
+        if (!historyChart) {
+          return;
+        }
+        let rpmMin = null;
+        let rpmMax = null;
+        let afrMin = null;
+        let afrMax = null;
+        valueScaleMap.forEach((scale, label) => {
+          if (!scale) {
+            return;
+          }
+          const hasMin = Number.isFinite(scale.min);
+          const hasMax = Number.isFinite(scale.max);
+          if (isRpmLabel(label)) {
+            if (hasMin) {
+              rpmMin = rpmMin === null ? scale.min : Math.min(rpmMin, scale.min);
+            }
+            if (hasMax) {
+              rpmMax = rpmMax === null ? scale.max : Math.max(rpmMax, scale.max);
+            }
+          } else if (isAfrLabel(label)) {
+            if (hasMin) {
+              afrMin = afrMin === null ? scale.min : Math.min(afrMin, scale.min);
+            }
+            if (hasMax) {
+              afrMax = afrMax === null ? scale.max : Math.max(afrMax, scale.max);
+            }
+          }
+        });
+        const yScale = historyChart.options.scales.y;
+        const y2Scale = historyChart.options.scales.y2;
+        if (yScale) {
+          if (afrMin === null) {
+            delete yScale.min;
+          } else {
+            yScale.min = afrMin;
+          }
+          if (afrMax === null) {
+            delete yScale.max;
+          } else {
+            yScale.max = afrMax;
+          }
+        }
+        if (y2Scale) {
+          if (rpmMin === null) {
+            delete y2Scale.min;
+          } else {
+            y2Scale.min = rpmMin;
+          }
+          if (rpmMax === null) {
+            delete y2Scale.max;
+          } else {
+            y2Scale.max = rpmMax;
+          }
+        }
+      }
+
       function saveHiddenSeries() {
         try {
           localStorage.setItem(hiddenSeriesKey, JSON.stringify(Array.from(hiddenSeries.values())));
@@ -1791,13 +1936,15 @@
                 },
               },
               y: {
-                grid: { color: "rgba(255,255,255,0.05)" },
-                ticks: { color: "rgba(255,255,255,0.6)" },
+                display: false,
+                grid: { display: false },
+                ticks: { display: false },
               },
               y2: {
+                display: false,
                 position: "right",
-                grid: { drawOnChartArea: false },
-                ticks: { color: "rgba(255,255,255,0.6)" },
+                grid: { display: false },
+                ticks: { display: false },
               },
             },
           },
@@ -1847,6 +1994,7 @@
             hidden: isSeriesHidden(label),
           };
         });
+        applyFixedScales();
         updateChartWindow();
         historyChart.update("none");
         refreshPanelDots();
@@ -1881,6 +2029,7 @@
           trimSeries(series, sample.ts);
         });
         historySeries.forEach((series) => trimSeries(series, sample.ts));
+        applyFixedScales();
         updateChartWindow();
         historyChart.update("none");
         refreshPanelDots();
@@ -1912,6 +2061,7 @@
 
       loadHiddenLabels();
       loadValueDecimals();
+      loadValueScale();
       loadAliasMap();
       loadPanelConfig();
       loadHiddenSeries();
