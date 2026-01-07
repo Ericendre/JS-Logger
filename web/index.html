@@ -23,6 +23,8 @@
       body {
         margin: 0;
         min-height: 100vh;
+        display: flex;
+        flex-direction: column;
         font-family: "Bahnschrift", "Franklin Gothic Medium", "Segoe UI", sans-serif;
         color: var(--text);
         background: radial-gradient(1200px 600px at 10% 10%, #244a64 0%, var(--bg) 50%, #0b141e 100%);
@@ -96,7 +98,8 @@
         padding: 8px clamp(16px, 4vw, 48px) 24px;
         display: flex;
         flex-direction: column;
-        height: calc(100vh - 150px);
+        flex: 1;
+        min-height: 0;
         gap: 16px;
       }
 
@@ -257,6 +260,22 @@
         display: grid;
         gap: 12px;
         min-height: 0;
+      }
+
+      .panel-splitter {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 12px;
+        cursor: row-resize;
+        user-select: none;
+      }
+
+      .panel-split-handle {
+        width: 80px;
+        height: 4px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.3);
       }
 
       .panel-cell {
@@ -481,6 +500,9 @@
           <button class="button" id="panel-settings">Settings</button>
         </div>
         <div class="panel-grid" id="panel-grid"></div>
+        <div class="panel-splitter" id="panel-splitter">
+          <div class="panel-split-handle"></div>
+        </div>
         <div class="panel-bottom">
           <div class="chart-wrapper">
             <canvas id="history-chart"></canvas>
@@ -642,6 +664,8 @@
       const panelApply = document.getElementById("panel-apply");
       const panelClose = document.getElementById("panel-close");
       const panelGrid = document.getElementById("panel-grid");
+      const panelBottom = document.querySelector(".panel-bottom");
+      const panelSplitter = document.getElementById("panel-splitter");
       const chartCanvas = document.getElementById("history-chart");
       const chartTooltip = document.getElementById("chart-tooltip");
       const chartToggle = document.getElementById("chart-toggle");
@@ -689,6 +713,7 @@
       let activeValueLabel = null;
       const panelConfig = { rows: 2, cols: 3, assignments: [] };
       const panelStorageKey = "gkflasher.panelConfig";
+      const panelSplitKey = "gkflasher.panelSplit";
       let panelCells = [];
       let activePanelCellIndex = null;
       const historyWindowMs = 30000;
@@ -1549,6 +1574,30 @@
         syncHistoryDatasets();
       }
 
+      function applyPanelSplit(value) {
+        if (!panelGrid || !panelBottom) {
+          return;
+        }
+        const v = Math.max(20, Math.min(80, Number(value) || 50));
+        panelGrid.style.flex = `${100 - v} 1 0`;
+        panelBottom.style.flex = `${v} 1 0`;
+        try {
+          localStorage.setItem(panelSplitKey, String(v));
+        } catch (error) {
+        }
+      }
+
+      function loadPanelSplit() {
+        try {
+          const raw = localStorage.getItem(panelSplitKey);
+          if (raw) {
+            return Number(raw);
+          }
+        } catch (error) {
+        }
+        return 50;
+      }
+
       function openPanelSettings() {
         if (!panelOverlay) {
           return;
@@ -1936,15 +1985,15 @@
                 },
               },
               y: {
-                display: false,
-                grid: { display: false },
-                ticks: { display: false },
+                display: true,
+                grid: { color: "rgba(255,255,255,0.05)" },
+                ticks: { color: "rgba(255,255,255,0.5)", font: { size: 10 } },
               },
               y2: {
-                display: false,
+                display: true,
                 position: "right",
-                grid: { display: false },
-                ticks: { display: false },
+                grid: { drawOnChartArea: false },
+                ticks: { color: "rgba(255,255,255,0.5)", font: { size: 10 } },
               },
             },
           },
@@ -2066,6 +2115,7 @@
       loadPanelConfig();
       loadHiddenSeries();
       buildPanelGrid();
+      applyPanelSplit(loadPanelSplit());
       initHistoryChart();
       connect();
       fetchStatus();
@@ -2135,6 +2185,34 @@
       }
       if (panelSettings) {
         panelSettings.addEventListener("click", openPanelSettings);
+      }
+      if (panelSplitter) {
+        const onMove = (event) => {
+          if (!panelGrid || !panelBottom) {
+            return;
+          }
+          const top = panelGrid.getBoundingClientRect().top;
+          const bottom = panelBottom.getBoundingClientRect().bottom;
+          const total = bottom - top;
+          if (total <= 0) {
+            return;
+          }
+          const clientY = event.clientY;
+          const graphHeight = bottom - clientY;
+          const percent = (graphHeight / total) * 100;
+          applyPanelSplit(percent);
+        };
+        const onUp = (event) => {
+          document.removeEventListener("pointermove", onMove);
+          document.removeEventListener("pointerup", onUp);
+          panelSplitter.releasePointerCapture(event.pointerId);
+        };
+        panelSplitter.addEventListener("pointerdown", (event) => {
+          panelSplitter.setPointerCapture(event.pointerId);
+          onMove(event);
+          document.addEventListener("pointermove", onMove);
+          document.addEventListener("pointerup", onUp);
+        });
       }
       if (panelApply) {
         panelApply.addEventListener("click", applyPanelSettings);
