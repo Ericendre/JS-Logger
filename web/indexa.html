@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>GKFlasher Live Logger</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.24/dist/uPlot.min.css" />
     <style>
       :root {
         color-scheme: light;
@@ -263,19 +264,35 @@
       }
 
       .panel-splitter {
+        position: relative;
         display: flex;
         align-items: center;
         justify-content: center;
-        height: 12px;
+        height: 14px;
         cursor: row-resize;
         user-select: none;
       }
 
+      .panel-splitter::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 50%;
+        height: 1px;
+        background: rgba(255, 255, 255, 0.12);
+      }
+
       .panel-split-handle {
-        width: 80px;
-        height: 4px;
+        width: 120px;
+        height: 6px;
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.35);
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.12);
+      }
+
+      .panel-splitter:hover .panel-split-handle {
+        background: rgba(255, 255, 255, 0.6);
       }
 
       .panel-cell {
@@ -505,12 +522,11 @@
         </div>
         <div class="panel-bottom">
           <div class="chart-wrapper">
-            <canvas id="history-chart"></canvas>
+            <div id="history-chart"></div>
             <div class="chart-tooltip" id="chart-tooltip"></div>
           </div>
           <div class="chart-controls">
             <button class="button" id="chart-toggle">Pause</button>
-            <input id="chart-slider" type="range" min="0" max="100" value="0" />
           </div>
         </div>
       </div>
@@ -627,7 +643,7 @@
         </div>
       </div>
     </div>
-    <script src="chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.24/dist/uPlot.iife.min.js"></script>
     <script>
       const body = document.getElementById("table-body");
       const statusDot = document.getElementById("status-dot");
@@ -666,10 +682,9 @@
       const panelGrid = document.getElementById("panel-grid");
       const panelBottom = document.querySelector(".panel-bottom");
       const panelSplitter = document.getElementById("panel-splitter");
-      const chartCanvas = document.getElementById("history-chart");
+      const chartRoot = document.getElementById("history-chart");
       const chartTooltip = document.getElementById("chart-tooltip");
       const chartToggle = document.getElementById("chart-toggle");
-      const chartSlider = document.getElementById("chart-slider");
       const cellOverlay = document.getElementById("cell-overlay");
       const cellTitle = document.getElementById("cell-title");
       const cellSelect = document.getElementById("cell-select");
@@ -717,15 +732,24 @@
       let panelCells = [];
       let activePanelCellIndex = null;
       const historyWindowMs = 30000;
+      const historyTimestamps = [];
       const historySeries = new Map();
       const hiddenSeries = new Set();
       const hiddenSeriesKey = "gkflasher.hiddenSeries";
       const chartColorMap = new Map();
       let historyChart = null;
+      let chartSeriesLabels = [];
+      let chartSeriesNames = [];
+      let chartResizeObserver = null;
       const chartColors = ["#f39c12", "#2ecc71", "#3498db", "#e74c3c", "#9b59b6", "#1abc9c", "#f1c40f"];
       let chartPaused = false;
-      let viewWindowMs = historyWindowMs;
-      let sliderValue = 0;
+      let pauseOffsetMs = 0;
+      let pauseStartTs = null;
+      let pauseLatestTs = null;
+      let chartLastTs = null;
+      let chartRenderPending = false;
+      let chartLastRender = 0;
+      const chartRenderIntervalMs = 50;
 
       const engineDisplacementL = 1.975;
       const engineCylinders = 4;
@@ -1739,62 +1763,25 @@
         return name.includes("air/fuel") || name.includes("afr");
       }
 
+      function scaleIdForLabel(label) {
+        return `s${hashLabel(label)}`;
+      }
+
       function applyFixedScales() {
         if (!historyChart) {
           return;
         }
-        let rpmMin = null;
-        let rpmMax = null;
-        let afrMin = null;
-        let afrMax = null;
-        valueScaleMap.forEach((scale, label) => {
+        const labels = getPanelLabels().filter((label) => !isSeriesHidden(label));
+        labels.forEach((label) => {
+          const scale = valueScaleMap.get(label);
           if (!scale) {
+            historyChart.setScale(scaleIdForLabel(label), { min: null, max: null });
             return;
           }
-          const hasMin = Number.isFinite(scale.min);
-          const hasMax = Number.isFinite(scale.max);
-          if (isRpmLabel(label)) {
-            if (hasMin) {
-              rpmMin = rpmMin === null ? scale.min : Math.min(rpmMin, scale.min);
-            }
-            if (hasMax) {
-              rpmMax = rpmMax === null ? scale.max : Math.max(rpmMax, scale.max);
-            }
-          } else if (isAfrLabel(label)) {
-            if (hasMin) {
-              afrMin = afrMin === null ? scale.min : Math.min(afrMin, scale.min);
-            }
-            if (hasMax) {
-              afrMax = afrMax === null ? scale.max : Math.max(afrMax, scale.max);
-            }
-          }
+          const min = Number.isFinite(scale.min) ? scale.min : null;
+          const max = Number.isFinite(scale.max) ? scale.max : null;
+          historyChart.setScale(scaleIdForLabel(label), { min, max });
         });
-        const yScale = historyChart.options.scales.y;
-        const y2Scale = historyChart.options.scales.y2;
-        if (yScale) {
-          if (afrMin === null) {
-            delete yScale.min;
-          } else {
-            yScale.min = afrMin;
-          }
-          if (afrMax === null) {
-            delete yScale.max;
-          } else {
-            yScale.max = afrMax;
-          }
-        }
-        if (y2Scale) {
-          if (rpmMin === null) {
-            delete y2Scale.min;
-          } else {
-            y2Scale.min = rpmMin;
-          }
-          if (rpmMax === null) {
-            delete y2Scale.max;
-          } else {
-            y2Scale.max = rpmMax;
-          }
-        }
       }
 
       function saveHiddenSeries() {
@@ -1853,7 +1840,8 @@
       function ensureHistorySeries(labels) {
         labels.forEach((label) => {
           if (!historySeries.has(label)) {
-            historySeries.set(label, []);
+            const series = new Array(historyTimestamps.length).fill(null);
+            historySeries.set(label, series);
           }
         });
         Array.from(historySeries.keys()).forEach((label) => {
@@ -1863,152 +1851,182 @@
         });
       }
 
-      function trimSeries(series, now) {
+      function trimHistory(now) {
         const cutoff = now - historyWindowMs;
-        while (series.length && series[0].x < cutoff) {
-          series.shift();
+        let removeCount = 0;
+        while (removeCount < historyTimestamps.length && historyTimestamps[removeCount] < cutoff) {
+          removeCount += 1;
+        }
+        if (removeCount > 0) {
+          historyTimestamps.splice(0, removeCount);
+          historySeries.forEach((series) => {
+            series.splice(0, removeCount);
+          });
         }
       }
 
       function getHistoryBounds() {
-        let min = null;
-        let max = null;
-        historySeries.forEach((series) => {
-          if (!series.length) {
-            return;
-          }
-          const first = series[0].x;
-          const last = series[series.length - 1].x;
-          if (min === null || first < min) {
-            min = first;
-          }
-          if (max === null || last > max) {
-            max = last;
-          }
-        });
-        return { min, max };
+        if (!historyTimestamps.length) {
+          return { min: null, max: null };
+        }
+        return {
+          min: historyTimestamps[0],
+          max: historyTimestamps[historyTimestamps.length - 1],
+        };
       }
 
-      function updateChartWindow() {
-        if (!historyChart) {
-          return;
-        }
-        const bounds = getHistoryBounds();
-        if (bounds.max === null) {
-          return;
-        }
-        const latest = bounds.max;
-        const earliest = bounds.min === null ? latest : bounds.min;
-        const maxOffset = Math.max(0, latest - earliest - viewWindowMs);
-        if (chartSlider) {
-          chartSlider.disabled = maxOffset <= 0;
-        }
-        const offset = maxOffset * (sliderValue / 100);
-        const xMax = latest - offset;
-        const xMin = xMax - viewWindowMs;
-        historyChart.options.scales.x.min = xMin;
-        historyChart.options.scales.x.max = xMax;
-      }
-
-      function initHistoryChart() {
-        if (historyChart) {
-          return;
-        }
-        if (!chartCanvas || !window.Chart) {
-          return;
-        }
-        const externalTooltipHandler = (context) => {
-          if (!chartTooltip) {
-            return;
-          }
-          const tooltip = context.tooltip;
-          if (tooltip.opacity === 0) {
-            chartTooltip.style.opacity = 0;
-            return;
-          }
-          const lines = tooltip.dataPoints || [];
-          let html = "";
-          if (lines.length) {
-            const ts = lines[0].parsed.x;
-            const timeLabel = new Date(ts).toLocaleTimeString();
-            html += `<strong>${timeLabel}</strong>`;
-          }
-          lines.forEach((point) => {
-            html += `<span>${point.dataset.label}: ${point.formattedValue}</span>`;
+      function buildUPlotSeries(labels) {
+        chartColorMap.clear();
+        const smoothPaths = window.uPlot && uPlot.paths && uPlot.paths.spline ? uPlot.paths.spline() : null;
+        const series = [
+          {
+            label: "Time",
+            value: (u, v) => new Date(v).toLocaleTimeString(),
+          },
+        ];
+        labels.forEach((label, index) => {
+          const color = chartColors[index % chartColors.length];
+          chartColorMap.set(label, color);
+          series.push({
+            label: displayName(label),
+            stroke: color,
+            width: 2,
+            scale: scaleIdForLabel(label),
+            paths: smoothPaths || undefined,
           });
-          chartTooltip.innerHTML = html;
-          const { offsetLeft, offsetTop } = context.chart.canvas;
-          chartTooltip.style.left = offsetLeft + tooltip.caretX + "px";
-          chartTooltip.style.top = offsetTop + tooltip.caretY + "px";
-          chartTooltip.style.opacity = 1;
-        };
-
-        const verticalLine = {
-          id: "verticalLine",
-          afterDraw(chart) {
-            const tooltip = chart.tooltip;
-            if (tooltip && tooltip._active && tooltip._active.length) {
-              const ctx = chart.ctx;
-              const x = tooltip._active[0].element.x;
-              const topY = chart.chartArea.top;
-              const bottomY = chart.chartArea.bottom;
-              ctx.save();
-              ctx.beginPath();
-              ctx.moveTo(x, topY);
-              ctx.lineTo(x, bottomY);
-              ctx.lineWidth = 1;
-              ctx.strokeStyle = "rgba(255,255,255,0.2)";
-              ctx.stroke();
-              ctx.restore();
-            }
-          },
-        };
-
-        historyChart = new Chart(chartCanvas, {
-          type: "line",
-          data: { datasets: [] },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: false,
-            interaction: { mode: "index", intersect: false },
-            plugins: {
-              legend: { display: false },
-              tooltip: { enabled: false, external: externalTooltipHandler },
-            },
-            scales: {
-              x: {
-                type: "linear",
-                grid: { color: "rgba(255,255,255,0.05)" },
-                ticks: {
-                  color: "rgba(255,255,255,0.6)",
-                  callback: (value) => {
-                    if (!lastSample) {
-                      return "";
-                    }
-                    const delta = Math.round((value - lastSample.ts) / 1000);
-                    return `${delta}s`;
-                  },
-                },
-              },
-              y: {
-                display: true,
-                grid: { color: "rgba(255,255,255,0.05)" },
-                ticks: { color: "rgba(255,255,255,0.5)", font: { size: 10 } },
-              },
-              y2: {
-                display: true,
-                position: "right",
-                grid: { drawOnChartArea: false },
-                ticks: { color: "rgba(255,255,255,0.5)", font: { size: 10 } },
-              },
-            },
-          },
-          plugins: [verticalLine],
         });
+        return series;
+      }
 
-        historyChart._colors = chartColors;
-        syncHistoryDatasets();
+      function buildUPlotData(labels) {
+        const data = [historyTimestamps];
+        labels.forEach((label) => {
+          data.push(historySeries.get(label) || []);
+        });
+        return data;
+      }
+
+      function destroyHistoryChart() {
+        if (chartResizeObserver) {
+          chartResizeObserver.disconnect();
+          chartResizeObserver = null;
+        }
+        if (historyChart) {
+          historyChart.destroy();
+          historyChart = null;
+        }
+      }
+
+      function createHistoryChart(labels) {
+        if (!chartRoot || !window.uPlot) {
+          return null;
+        }
+        const scales = { x: { time: false }, y: { auto: true } };
+        labels.forEach((label) => {
+          scales[scaleIdForLabel(label)] = { auto: true };
+        });
+        const series = buildUPlotSeries(labels);
+        const data = buildUPlotData(labels);
+        const width = chartRoot.clientWidth || 640;
+        const height = chartRoot.clientHeight || 240;
+        const chart = new uPlot({
+          width,
+          height,
+          series,
+          scales,
+          axes: [
+            {
+              grid: { show: true, stroke: "rgba(255,255,255,0.05)" },
+              values: (u, ticks) => ticks.map((value) => {
+                if (!lastSample) {
+                  return "";
+                }
+                const baseTs = chartLastTs ?? (lastSample ? lastSample.ts : null);
+                if (!baseTs) {
+                  return "";
+                }
+                const delta = Math.round((value - baseTs) / 1000);
+                return `${delta}s`;
+              }),
+              stroke: "rgba(255,255,255,0.6)",
+            },
+            {
+              show: false,
+              scale: "y",
+            },
+          ],
+          cursor: {
+            y: false,
+            points: { show: false },
+          },
+          legend: { show: false },
+          hooks: {
+            setCursor: [
+              (u) => {
+                if (!chartTooltip) {
+                  return;
+                }
+                const idx = u.cursor.idx;
+                if (idx === null || idx === undefined || idx < 0) {
+                  chartTooltip.style.opacity = 0;
+                  return;
+                }
+                const ts = u.data[0][idx];
+                if (!Number.isFinite(ts)) {
+                  chartTooltip.style.opacity = 0;
+                  return;
+                }
+                let html = `<strong>${new Date(ts).toLocaleTimeString()}</strong>`;
+                for (let i = 1; i < u.series.length; i += 1) {
+                  const rawLabel = labels[i - 1];
+                  const value = u.data[i][idx];
+                  if (!Number.isFinite(value)) {
+                    continue;
+                  }
+                  html += `<span>${displayName(rawLabel)}: ${formatValue(value, rawLabel)}</span>`;
+                }
+                chartTooltip.innerHTML = html;
+                const left = u.cursor.left + u.bbox.left;
+                const top = u.cursor.top + u.bbox.top;
+                chartTooltip.style.left = `${left}px`;
+                chartTooltip.style.top = `${top}px`;
+                chartTooltip.style.opacity = 1;
+              },
+            ],
+            draw: [
+              (u) => {
+                const idx = u.cursor.idx;
+                if (idx === null || idx === undefined) {
+                  return;
+                }
+                const ts = u.data[0][idx];
+                if (!Number.isFinite(ts)) {
+                  return;
+                }
+                const x = u.valToPos(ts, "x", true);
+                u.ctx.save();
+                u.ctx.strokeStyle = "rgba(255,255,255,0.2)";
+                u.ctx.beginPath();
+                u.ctx.moveTo(Math.round(x) + 0.5, u.bbox.top);
+                u.ctx.lineTo(Math.round(x) + 0.5, u.bbox.top + u.bbox.height);
+                u.ctx.stroke();
+                u.ctx.restore();
+              },
+            ],
+          },
+        }, data, chartRoot);
+
+        chartResizeObserver = new ResizeObserver((entries) => {
+          entries.forEach((entry) => {
+            const { width, height } = entry.contentRect;
+            if (width > 0 && height > 0 && historyChart) {
+              historyChart.setSize({ width, height });
+            }
+          });
+        });
+        chartResizeObserver.observe(chartRoot);
+
+        return chart;
       }
 
       function refreshPanelDots() {
@@ -2024,71 +2042,94 @@
         });
       }
 
-      function syncHistoryDatasets() {
-        if (!historyChart) {
-          initHistoryChart();
+      function sameLabels(nextLabels, currentLabels) {
+        if (nextLabels.length !== currentLabels.length) {
+          return false;
         }
-        if (!historyChart) {
-          return;
+        for (let i = 0; i < nextLabels.length; i += 1) {
+          if (nextLabels[i] !== currentLabels[i]) {
+            return false;
+          }
         }
+        return true;
+      }
+
+      function renderChart() {
         const labels = getPanelLabels();
         ensureHistorySeries(labels);
         const visibleLabels = labels.filter((label) => !isSeriesHidden(label));
-        chartColorMap.clear();
-        historyChart.data.datasets = visibleLabels.map((label, index) => {
-          const color = historyChart._colors[index % historyChart._colors.length];
-          chartColorMap.set(label, color);
-          return {
-            label: displayName(label),
-            data: historySeries.get(label) || [],
-            borderColor: color,
-            backgroundColor: color,
-            borderWidth: 2,
-            tension: 0.25,
-            pointRadius: 0,
-            yAxisID: isRpmLabel(label) ? "y2" : "y",
-            hidden: isSeriesHidden(label),
-          };
-        });
+        const visibleNames = visibleLabels.map((label) => displayName(label));
+        if (!historyChart || !sameLabels(visibleLabels, chartSeriesLabels) || !sameLabels(visibleNames, chartSeriesNames)) {
+          destroyHistoryChart();
+          historyChart = createHistoryChart(visibleLabels);
+          chartSeriesLabels = visibleLabels.slice();
+          chartSeriesNames = visibleNames.slice();
+        } else if (historyChart) {
+          historyChart.setData(buildUPlotData(visibleLabels));
+        }
+        if (!historyChart) {
+          return;
+        }
         applyFixedScales();
-        updateChartWindow();
-        historyChart.update("none");
         refreshPanelDots();
       }
 
+      function scheduleChartRender() {
+        if (chartRenderPending) {
+          return;
+        }
+        chartRenderPending = true;
+        requestAnimationFrame((ts) => {
+          chartRenderPending = false;
+          if (ts - chartLastRender < chartRenderIntervalMs) {
+            scheduleChartRender();
+            return;
+          }
+          chartLastRender = ts;
+          renderChart();
+        });
+      }
+
+      function syncHistoryDatasets() {
+        renderChart();
+      }
+
       function updateHistoryChart(sample) {
-        if (!sample || chartPaused) {
+        if (!sample) {
           return;
         }
-        if (!historyChart) {
-          initHistoryChart();
-        }
-        if (!historyChart) {
+        if (chartPaused) {
+          if (pauseStartTs === null) {
+            pauseStartTs = sample.ts;
+          }
+          pauseLatestTs = sample.ts;
           return;
+        }
+        if (pauseStartTs !== null && pauseLatestTs !== null) {
+          pauseOffsetMs += pauseLatestTs - pauseStartTs;
+          pauseStartTs = null;
+          pauseLatestTs = null;
         }
         const labels = getPanelLabels();
         ensureHistorySeries(labels);
+        const adjustedTs = sample.ts - pauseOffsetMs;
+        historyTimestamps.push(adjustedTs);
+        chartLastTs = adjustedTs;
         labels.forEach((label) => {
-          if (isSeriesHidden(label)) {
-            return;
-          }
           const idx = labelIndexMap.get(label);
-          if (idx === undefined) {
-            return;
-          }
-          const value = Number(sample.values[idx]);
-          if (!Number.isFinite(value)) {
-            return;
-          }
           const series = historySeries.get(label);
-          series.push({ x: sample.ts, y: value });
-          trimSeries(series, sample.ts);
+          if (!series) {
+            return;
+          }
+          let value = null;
+          if (idx !== undefined) {
+            const raw = Number(sample.values[idx]);
+            value = Number.isFinite(raw) ? raw : null;
+          }
+          series.push(value);
         });
-        historySeries.forEach((series) => trimSeries(series, sample.ts));
-        applyFixedScales();
-        updateChartWindow();
-        historyChart.update("none");
-        refreshPanelDots();
+        trimHistory(adjustedTs);
+        scheduleChartRender();
       }
 
       function connect() {
@@ -2123,7 +2164,7 @@
       loadHiddenSeries();
       buildPanelGrid();
       applyPanelSplit(loadPanelSplit());
-      initHistoryChart();
+      syncHistoryDatasets();
       connect();
       fetchStatus();
       setInterval(fetchStatus, 3000);
@@ -2251,31 +2292,7 @@
         chartToggle.addEventListener("click", () => {
           chartPaused = !chartPaused;
           chartToggle.textContent = chartPaused ? "Play" : "Pause";
-          if (!chartPaused && lastSample) {
-            updateHistoryChart(lastSample);
-          }
         });
-      }
-      if (chartSlider) {
-        chartSlider.addEventListener("input", () => {
-          sliderValue = Number(chartSlider.value) || 0;
-          updateChartWindow();
-          if (historyChart) {
-            historyChart.update("none");
-          }
-        });
-      }
-      if (chartCanvas) {
-        chartCanvas.addEventListener("wheel", (event) => {
-          event.preventDefault();
-          const delta = Math.sign(event.deltaY);
-          const factor = delta > 0 ? 1.2 : 0.8;
-          viewWindowMs = Math.min(historyWindowMs, Math.max(5000, viewWindowMs * factor));
-          updateChartWindow();
-          if (historyChart) {
-            historyChart.update("none");
-          }
-        }, { passive: false });
       }
 
       setInterval(() => {
@@ -2309,6 +2326,13 @@
           panels.forEach((panel) =>
             panel.classList.toggle("active", panel.dataset.panel === target)
           );
+          if (target === "overview" && historyChart && chartRoot) {
+            const width = chartRoot.clientWidth;
+            const height = chartRoot.clientHeight;
+            if (width > 0 && height > 0) {
+              historyChart.setSize({ width, height });
+            }
+          }
         });
       });
     </script>

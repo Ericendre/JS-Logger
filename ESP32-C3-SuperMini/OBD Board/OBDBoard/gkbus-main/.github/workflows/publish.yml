@@ -1,0 +1,49 @@
+name: Create Release and Publish to PyPI
+on:
+  push:
+#    branches: master
+jobs:
+  pypi-publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+      url: https://pypi.org/p/gkbus
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+
+      - name: Get Build Version
+        run: |
+            buildversion="0.2.${GITHUB_RUN_NUMBER}"
+            echo "Build Number: $buildversion"
+            echo "version=$buildversion" >> $GITHUB_ENV
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10.11'
+          architecture: 'x64'
+          allow-prereleases: true
+
+      - name: Install dependencies
+        run: |
+          pip install build
+
+      - name: Build Python Package
+        run: |
+          python -m build
+
+      - name: Create GitHub Release
+        uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: ${{env.version}}
+          prerelease: false
+          title: ${{env.version}}
+
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        
