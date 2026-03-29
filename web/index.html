@@ -194,6 +194,23 @@
         gap: 8px;
       }
 
+      .overlay-group {
+        display: grid;
+        gap: 8px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .overlay-group-title {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+
       .overlay-item {
         display: grid;
         grid-template-columns: auto 1fr;
@@ -1469,12 +1486,33 @@
         }
       }
 
-      function renderOptions() {
-        if (!optionsList) {
-          return;
+      function getBleLabelSet() {
+        return new Set(bleExtraLabels);
+      }
+
+      function getServerOptionLabels() {
+        const bleLabels = getBleLabelSet();
+        return currentLabels.filter((label) => !bleLabels.has(label));
+      }
+
+      function getBleOptionLabels() {
+        const bleLabels = getBleLabelSet();
+        return currentLabels.filter((label) => bleLabels.has(label));
+      }
+
+      function buildOptionGroup(title, labels) {
+        if (!labels.length) {
+          return null;
         }
-        optionsList.innerHTML = "";
-        currentLabels.forEach((label) => {
+        const group = document.createElement("section");
+        group.className = "overlay-group";
+
+        const heading = document.createElement("div");
+        heading.className = "overlay-group-title";
+        heading.textContent = title;
+        group.appendChild(heading);
+
+        labels.forEach((label) => {
           const item = document.createElement("label");
           item.className = "overlay-item";
           const checkbox = document.createElement("input");
@@ -1493,8 +1531,25 @@
           text.textContent = label;
           item.appendChild(checkbox);
           item.appendChild(text);
-          optionsList.appendChild(item);
+          group.appendChild(item);
         });
+
+        return group;
+      }
+
+      function renderOptions() {
+        if (!optionsList) {
+          return;
+        }
+        optionsList.innerHTML = "";
+        const serverGroup = buildOptionGroup("Valeurs serveur", getServerOptionLabels());
+        const bleGroup = buildOptionGroup("Valeurs BLE", getBleOptionLabels());
+        if (serverGroup) {
+          optionsList.appendChild(serverGroup);
+        }
+        if (bleGroup) {
+          optionsList.appendChild(bleGroup);
+        }
       }
 
       function openOptions() {

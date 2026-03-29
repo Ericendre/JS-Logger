@@ -65,6 +65,23 @@ def poll_values(ecu) -> list[float]:
     return values
 
 
+def poll_sample(ecu) -> dict:
+    values = []
+    raw_packets = []
+    for index, source in enumerate(data_sources):
+        raw_data = ecu.bus.execute(source["payload"]).get_data()
+        raw_packets.append(
+            {
+                "source_index": index,
+                "hex": raw_data.hex().upper(),
+            }
+        )
+        for parameter in source["parameters"]:
+            value = grab(raw_data, parameter)
+            values.append(convert(value, parameter))
+    return {"values": values, "raw_packets": raw_packets}
+
+
 def setup_ecu(config: dict, args: argparse.Namespace):
     print(f"[*] Selected protocol: {config['protocol']}. Initializing..")
     bus = initialize_bus(config["protocol"], config[config["protocol"]])
@@ -177,7 +194,12 @@ class LogState:
 def log_loop(state: LogState, ecu):
     try:
         while state.running and state.connected:
-            payload = {"ts": int(time.time() * 1000), "values": poll_values(ecu)}
+            sample = poll_sample(ecu)
+            payload = {
+                "ts": int(time.time() * 1000),
+                "values": sample["values"],
+                "raw_packets": sample["raw_packets"],
+            }
             state.last = payload
             with state.lock:
                 for client_queue in list(state.clients):

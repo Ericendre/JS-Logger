@@ -5,8 +5,7 @@
 
 Adafruit_ADS1115 ads;
 
-const int pwmPin = 0;
-const int pwmChannel = 0;
+const int pwmPin = 3;
 const int pwmFreq = 20000;
 const int pwmRes = 10;
 
@@ -172,8 +171,7 @@ void setup(void)
 
   addPeer();
 
-  ledcSetup(pwmChannel, pwmFreq, pwmRes);
-  ledcAttachPin(pwmPin, pwmChannel);
+  ledcAttach(pwmPin, pwmFreq, pwmRes);
 }
 
 void loop(void)
@@ -235,7 +233,7 @@ void updateAfrAnalogOutput(float inputVoltage)
     duty = (1 << pwmRes) - 1;
   }
 
-  ledcWrite(pwmChannel, duty);
+  ledcWrite(pwmPin, duty);
 }
 
 float voltageToTemperature(float V)
@@ -310,7 +308,7 @@ void updateSensorData()
   float afrVoltage = ads.computeVolts(ads.readADC_SingleEnded(0));
 
   packet.air_temp = voltageToTemperature(ads.computeVolts(ads.readADC_SingleEnded(3)));
-  packet.air_pressure = mapfloat(ads.computeVolts(ads.readADC_SingleEnded(2)), 0.4, 4.65, 0.2, 3.0) - 1.0;
+  packet.air_pressure = (-1) + mapfloat(ads.computeVolts(ads.readADC_SingleEnded(2)), 0.4, 4.65, 0.2, 3.0);
   packet.oil_pressure = mapfloat(ads.computeVolts(ads.readADC_SingleEnded(1)), 0.5, 4.5, 0, 7.0);
   packet.AFR = mapfloat(afrVoltage, 0.5, 4.25, 11.0, 18.5);
 
