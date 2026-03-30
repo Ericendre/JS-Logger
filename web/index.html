@@ -129,6 +129,14 @@
         gap: 16px;
       }
 
+      body.fullscreen-active header {
+        display: none;
+      }
+
+      body.fullscreen-active main {
+        padding-top: 20px;
+      }
+
       .footer-bar {
         padding: 10px clamp(16px, 4vw, 48px) 18px;
         display: flex;
@@ -170,6 +178,14 @@
         flex-wrap: wrap;
       }
 
+      .tabs-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
       .tab {
         border: 1px solid transparent;
         border-radius: 999px;
@@ -195,6 +211,12 @@
 
       .tab-panel.active {
         display: block;
+      }
+
+      .raw-panel.active {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
       }
 
       .panel-header {
@@ -294,6 +316,15 @@
         font-size: 13px;
       }
 
+      select.value-input {
+        color-scheme: dark;
+      }
+
+      select.value-input option {
+        color: #101820;
+        background: #f3f7fb;
+      }
+
       .icon-button {
         width: 34px;
         height: 34px;
@@ -329,6 +360,44 @@
         display: grid;
         gap: 12px;
         min-height: 0;
+        position: relative;
+      }
+
+      .panel-column-splitter {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 14px;
+        margin-left: -7px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: col-resize;
+        user-select: none;
+        z-index: 4;
+      }
+
+      .panel-column-splitter::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 50%;
+        width: 1px;
+        transform: translateX(-50%);
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      .panel-column-handle {
+        width: 6px;
+        height: 120px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.35);
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.12);
+      }
+
+      .panel-column-splitter:hover .panel-column-handle {
+        background: rgba(255, 255, 255, 0.6);
       }
 
       .panel-splitter {
@@ -393,6 +462,7 @@
         display: inline-flex;
         align-items: center;
         gap: 8px;
+        min-width: 0;
         font-size: 22px;
         font-weight: 700;
         text-transform: uppercase;
@@ -404,6 +474,7 @@
       }
 
       .panel-dot {
+        flex: 0 0 auto;
         width: 16px;
         height: 16px;
         border-radius: 50%;
@@ -416,6 +487,10 @@
       }
 
       .panel-label span:last-child {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
         pointer-events: none;
       }
 
@@ -485,10 +560,13 @@
       }
 
       .chart-controls {
-        margin-top: 8px;
+        position: absolute;
+        top: 12px;
+        right: 12px;
         display: flex;
         align-items: center;
         gap: 12px;
+        z-index: 3;
       }
 
       .monitor-panel {
@@ -624,6 +702,13 @@
         font-size: 14px;
       }
 
+      .raw-table-wrap {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+      }
+
+
       thead th {
         text-align: left;
         padding: 10px 12px;
@@ -694,19 +779,22 @@
         <div class="controls">
           <button class="button" id="connect-button">Connect ECU</button>
           <button class="button" id="ble-connect-button">Connect BLE</button>
+          <button class="button" id="fullscreen-button" type="button">Plein ecran</button>
         </div>
       </div>
     </header>
 
     <main>
-      <div class="tabs">
-        <button class="tab" data-tab="overview">Overview</button>
-        <button class="tab" data-tab="monitor">Monitor</button>
-        <button class="tab active" data-tab="raw">Raw Data</button>
-        <button class="tab" data-tab="settings">Settings</button>
+      <div class="tabs-bar">
+        <div class="tabs">
+          <button class="tab active" data-tab="overview">Overview</button>
+          <button class="tab" data-tab="monitor">Monitor</button>
+          <button class="tab" data-tab="raw">Raw Data</button>
+          <button class="tab" data-tab="settings">Settings</button>
+        </div>
       </div>
 
-      <div class="card tab-panel panel-split" data-panel="overview">
+      <div class="card tab-panel panel-split active" data-panel="overview">
         <div class="panel-header">
           <strong>Panel</strong>
         </div>
@@ -718,10 +806,10 @@
           <div class="chart-wrapper">
             <div id="history-chart"></div>
             <div class="chart-tooltip" id="chart-tooltip"></div>
-          </div>
-          <div class="chart-controls">
-            <button class="button" id="chart-toggle">Pause</button>
-            <button class="button" id="record-toggle">Start recording</button>
+            <div class="chart-controls">
+              <button class="button" id="chart-toggle">Pause</button>
+              <button class="button" id="record-toggle">Start recording</button>
+            </div>
           </div>
         </div>
       </div>
@@ -729,6 +817,10 @@
       <div class="card tab-panel monitor-panel" data-panel="monitor">
         <div class="panel-header">
           <strong>Monitor</strong>
+          <div class="panel-actions">
+            <button class="button" id="load-log-button">Load Log</button>
+            <input class="hidden-input" id="load-log-input" type="file" accept=".json,application/json" />
+          </div>
         </div>
         <div class="monitor-toolbar">
           <label for="monitor-zoom-slider">Zoom</label>
@@ -745,7 +837,7 @@
         </div>
       </div>
       
-      <div class="card tab-panel active" data-panel="raw">
+      <div class="card tab-panel raw-panel" data-panel="raw">
         <div class="panel-header">
           <strong>Raw data</strong>
           <div class="panel-actions">
@@ -753,16 +845,18 @@
             <button class="button" id="ble-log-button">BLE log</button>
           </div>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Parameter</th>
-              <th style="text-align: right">Value</th>
-              <th style="text-align: center">Options</th>
-            </tr>
-          </thead>
-          <tbody id="table-body"></tbody>
-        </table>
+        <div class="raw-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Parameter</th>
+                <th style="text-align: right">Value</th>
+                <th style="text-align: center">Options</th>
+              </tr>
+            </thead>
+            <tbody id="table-body"></tbody>
+          </table>
+        </div>
         <div class="timestamp" id="timestamp"></div>
       </div>
       
@@ -823,10 +917,8 @@
     </main>
     <footer class="footer-bar">
       <div class="footer-actions">
-        <button class="button" id="load-log-button">Load log</button>
-        <input class="hidden-input" id="load-log-input" type="file" accept=".json,application/json" />
       </div>
-      <div class="footer-status" id="load-log-status">No log loaded</div>
+      <div class="footer-status" id="load-log-status"></div>
     </footer>
     <div class="overlay" id="options-overlay">
       <div class="overlay-card">
@@ -914,6 +1006,7 @@
       const timestampEl = document.getElementById("timestamp");
       const connectButton = document.getElementById("connect-button");
       const bleConnectButton = document.getElementById("ble-connect-button");
+      const fullscreenButton = document.getElementById("fullscreen-button");
       const bleStatus = document.getElementById("ble-status");
       const simulateButton = document.getElementById("simulate-button");
       const optionsButton = document.getElementById("options-button");
@@ -1006,7 +1099,7 @@
       const labelIndexMap = new Map();
       let lastSample = null;
       let activeValueLabel = null;
-      const panelConfig = { rows: 2, cols: 3, assignments: [] };
+      const panelConfig = { rows: 2, cols: 3, assignments: [], columnFractions: [1, 1, 1] };
       const panelStorageKey = "gkflasher.panelConfig";
       const monitorConfig = { count: 4, zoom: 1, offset: 0, assignments: [] };
       const monitorStorageKey = "gkflasher.monitorConfig";
@@ -1040,6 +1133,7 @@
       const displaySettingsKey = "gkflasher.displaySettings";
       let isRecording = false;
       let recordedEvents = [];
+      let recordingStartTs = null;
       let loadedLogData = null;
       let loadedLogLabels = [];
       let activeMonitorChartIndex = null;
@@ -2131,6 +2225,13 @@
         if (!isRecording || !sample || !updatedLabels) {
           return;
         }
+        const sampleTs = Number(sample.ts);
+        if (!Number.isFinite(sampleTs)) {
+          return;
+        }
+        if (!Number.isFinite(recordingStartTs)) {
+          recordingStartTs = sampleTs;
+        }
         const labels = Array.from(new Set(updatedLabels));
         const values = {};
         labels.forEach((label) => {
@@ -2150,8 +2251,10 @@
         if (!Object.keys(values).length) {
           return;
         }
+        const localTsMs = Math.max(0, sampleTs - recordingStartTs);
         recordedEvents.push({
-          ts: sample.ts,
+          ts: sampleTs,
+          local_ts_ms: localTsMs,
           source,
           values,
         });
@@ -2160,6 +2263,8 @@
       function downloadRecordedLog() {
         const payload = {
           exported_at: new Date().toISOString(),
+          recording_started_at: Number.isFinite(recordingStartTs) ? new Date(recordingStartTs).toISOString() : null,
+          recording_started_ts: Number.isFinite(recordingStartTs) ? recordingStartTs : null,
           labels: currentLabels.filter((label) => !hiddenLabels.has(label)),
           events: recordedEvents,
         };
@@ -2183,9 +2288,11 @@
           setRecordingUiState();
           downloadRecordedLog();
           recordedEvents = [];
+          recordingStartTs = null;
           return;
         }
         recordedEvents = [];
+        recordingStartTs = null;
         isRecording = true;
         setRecordingUiState();
       }
@@ -2353,9 +2460,96 @@
             panelConfig.rows = Math.max(1, Math.min(6, data.rows));
             panelConfig.cols = Math.max(1, Math.min(6, data.cols));
             panelConfig.assignments = Array.isArray(data.assignments) ? data.assignments : [];
+            panelConfig.columnFractions = Array.isArray(data.columnFractions) ? data.columnFractions : [];
           }
         } catch (error) {
         }
+      }
+
+      function resetColumnFractions() {
+        panelConfig.columnFractions = Array.from({ length: panelConfig.cols }, () => 1);
+      }
+
+      function normalizeColumnFractions() {
+        const expected = panelConfig.cols;
+        if (!Array.isArray(panelConfig.columnFractions) || panelConfig.columnFractions.length !== expected) {
+          resetColumnFractions();
+          return;
+        }
+        const cleaned = panelConfig.columnFractions.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0);
+        if (cleaned.length !== expected) {
+          resetColumnFractions();
+          return;
+        }
+        panelConfig.columnFractions = cleaned;
+      }
+
+      function getPanelGridGap() {
+        if (!panelGrid) {
+          return 12;
+        }
+        const style = getComputedStyle(panelGrid);
+        const gap = Number.parseFloat(style.columnGap || style.gap || "12");
+        return Number.isFinite(gap) ? gap : 12;
+      }
+
+      function getPanelColumnWidthsPx() {
+        normalizeColumnFractions();
+        if (!panelGrid) {
+          return [];
+        }
+        const gap = getPanelGridGap();
+        const usableWidth = panelGrid.clientWidth - gap * Math.max(0, panelConfig.cols - 1);
+        if (usableWidth <= 0) {
+          return panelConfig.columnFractions.map(() => 0);
+        }
+        const total = panelConfig.columnFractions.reduce((sum, value) => sum + value, 0) || panelConfig.cols;
+        return panelConfig.columnFractions.map((value) => (usableWidth * value) / total);
+      }
+
+      function updatePanelGridColumns() {
+        if (!panelGrid) {
+          return;
+        }
+        normalizeColumnFractions();
+        panelGrid.style.gridTemplateColumns = panelConfig.columnFractions.map((value) => `minmax(0, ${value}fr)`).join(" ");
+      }
+
+      function buildPanelColumnSplitters() {
+        if (!panelGrid) {
+          return;
+        }
+        panelGrid.querySelectorAll(".panel-column-splitter").forEach((node) => node.remove());
+        if (panelConfig.cols < 2) {
+          return;
+        }
+        const widths = getPanelColumnWidthsPx();
+        const gap = getPanelGridGap();
+        let offset = 0;
+        for (let index = 0; index < panelConfig.cols - 1; index += 1) {
+          offset += widths[index];
+          const splitter = document.createElement("div");
+          splitter.className = "panel-column-splitter";
+          splitter.style.left = `${offset + gap * index + gap / 2}px`;
+          splitter.dataset.index = String(index);
+          const handle = document.createElement("div");
+          handle.className = "panel-column-handle";
+          splitter.appendChild(handle);
+          panelGrid.appendChild(splitter);
+        }
+      }
+
+      function syncPanelColumnLayout() {
+        updatePanelGridColumns();
+        buildPanelColumnSplitters();
+      }
+
+      function schedulePanelColumnLayout() {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            syncPanelColumnLayout();
+          });
+        });
       }
 
       function loadMonitorConfig() {
@@ -2389,6 +2583,7 @@
         if (panelConfig.assignments.length > total) {
           panelConfig.assignments = panelConfig.assignments.slice(0, total);
         }
+        normalizeColumnFractions();
       }
 
       function ensureMonitorAssignments() {
@@ -2406,7 +2601,7 @@
         }
         ensurePanelAssignments();
         panelGrid.innerHTML = "";
-        panelGrid.style.gridTemplateColumns = `repeat(${panelConfig.cols}, minmax(0, 1fr))`;
+        updatePanelGridColumns();
         panelCells = [];
         panelConfig.assignments.forEach((label, index) => {
           const cell = document.createElement("div");
@@ -2440,6 +2635,7 @@
           panelGrid.appendChild(cell);
           panelCells.push({ labelEl, valueEl });
         });
+        schedulePanelColumnLayout();
         if (lastSample) {
           updatePanelValues(lastSample);
         }
@@ -2476,6 +2672,7 @@
       }
 
       function applyPanelSettings() {
+        const previousCols = panelConfig.cols;
         const rows = Number(panelRows.value);
         const cols = Number(panelCols.value);
         if (Number.isInteger(rows) && rows > 0) {
@@ -2483,6 +2680,9 @@
         }
         if (Number.isInteger(cols) && cols > 0) {
           panelConfig.cols = Math.max(1, Math.min(6, cols));
+        }
+        if (panelConfig.cols !== previousCols) {
+          resetColumnFractions();
         }
         ensurePanelAssignments();
         savePanelConfig();
@@ -2625,6 +2825,26 @@
           }
         } catch (error) {
         }
+      }
+
+      function syncFullscreenUi() {
+        const isFullscreen = Boolean(document.fullscreenElement);
+        document.body.classList.toggle("fullscreen-active", isFullscreen);
+        if (fullscreenButton) {
+          fullscreenButton.textContent = isFullscreen ? "Quitter plein ecran" : "Plein ecran";
+        }
+      }
+
+      async function toggleFullscreen() {
+        try {
+          if (document.fullscreenElement) {
+            await document.exitFullscreen();
+          } else {
+            await document.documentElement.requestFullscreen();
+          }
+        } catch (error) {
+        }
+        syncFullscreenUi();
       }
 
       function applyDisplaySettings() {
@@ -3178,6 +3398,7 @@
       loadMonitorConfig();
       loadDisplaySettings();
       loadHiddenSeries();
+      syncFullscreenUi();
       buildPanelGrid();
       buildMonitorCharts();
       applyPanelSplit(loadPanelSplit());
@@ -3279,6 +3500,55 @@
           document.addEventListener("pointerup", onUp);
         });
       }
+      if (panelGrid) {
+        panelGrid.addEventListener("pointerdown", (event) => {
+          const splitter = event.target.closest(".panel-column-splitter");
+          if (!splitter) {
+            return;
+          }
+          const index = Number(splitter.dataset.index);
+          if (!Number.isInteger(index)) {
+            return;
+          }
+          const initialWidths = getPanelColumnWidthsPx();
+          const totalPairWidth = (initialWidths[index] || 0) + (initialWidths[index + 1] || 0);
+          if (totalPairWidth <= 0) {
+            return;
+          }
+          const gap = getPanelGridGap();
+          const usableWidth = panelGrid.clientWidth - gap * Math.max(0, panelConfig.cols - 1);
+          if (usableWidth <= 0) {
+            return;
+          }
+          const minWidth = Math.max(90, usableWidth * 0.08);
+          const startX = event.clientX;
+          const startLeft = initialWidths[index] || 0;
+          const pairFractionTotal =
+            (panelConfig.columnFractions[index] || 0) + (panelConfig.columnFractions[index + 1] || 0);
+          if (pairFractionTotal <= 0) {
+            return;
+          }
+          splitter.setPointerCapture(event.pointerId);
+          const onMove = (moveEvent) => {
+            const delta = moveEvent.clientX - startX;
+            const nextLeft = Math.max(minWidth, Math.min(totalPairWidth - minWidth, startLeft + delta));
+            const nextRight = totalPairWidth - nextLeft;
+            const leftRatio = nextLeft / totalPairWidth;
+            panelConfig.columnFractions[index] = pairFractionTotal * leftRatio;
+            panelConfig.columnFractions[index + 1] = pairFractionTotal * (1 - leftRatio);
+            savePanelConfig();
+            syncPanelColumnLayout();
+          };
+          const onUp = (upEvent) => {
+            document.removeEventListener("pointermove", onMove);
+            document.removeEventListener("pointerup", onUp);
+            splitter.releasePointerCapture(upEvent.pointerId);
+          };
+          onMove(event);
+          document.addEventListener("pointermove", onMove);
+          document.addEventListener("pointerup", onUp);
+        });
+      }
       if (panelApply) {
         panelApply.addEventListener("click", applyPanelSettings);
       }
@@ -3349,6 +3619,10 @@
           loadLogInput.value = "";
         });
       }
+      if (fullscreenButton) {
+        fullscreenButton.addEventListener("click", toggleFullscreen);
+      }
+      document.addEventListener("fullscreenchange", syncFullscreenUi);
 
       setInterval(() => {
         const now = performance.now();
@@ -3382,6 +3656,7 @@
             panel.classList.toggle("active", panel.dataset.panel === target)
           );
           if (target === "overview" && historyChart && chartRoot) {
+            schedulePanelColumnLayout();
             const width = chartRoot.clientWidth;
             const height = chartRoot.clientHeight;
             if (width > 0 && height > 0) {
@@ -3389,6 +3664,9 @@
             }
           }
         });
+      });
+      window.addEventListener("resize", () => {
+        schedulePanelColumnLayout();
       });
     </script>
   </body>

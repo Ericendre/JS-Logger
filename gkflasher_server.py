@@ -1,7 +1,9 @@
 import argparse
+import ast
 import json
 import os
 import queue
+import re
 import sys
 import threading
 import time
@@ -20,7 +22,7 @@ from gkbus.protocol.kwp2000.enums import DiagnosticSession
 
 from ecu_definitions import BAUDRATES, AccessLevel
 from flasher.ecu import DesiredBaudrate, calculate_key
-from flasher.logging import data_sources, grab, convert
+from flasher.logging import data_sources
 from gkflasher import initialize_bus, cli_identify_ecu
 
 
@@ -32,41 +34,217 @@ def load_config(config_path: str) -> dict:
         return yaml.safe_load(handle)
 
 
+def load_optional_config(config_path: str) -> dict:
+    path = Path(config_path)
+    if not path.is_absolute():
+        path = BASE_DIR / path
+    if not path.exists():
+        return {}
+    with open(path, "r", encoding="utf-8") as handle:
+        return yaml.safe_load(handle) or {}
+
+
 def build_config(args: argparse.Namespace) -> dict:
     config = load_config(args.config)
     if args.protocol:
         config["protocol"] = args.protocol
     if args.interface:
         config[config["protocol"]]["interface"] = args.interface
-    if args.baudrate:
+    if args.baudrate and not should_treat_baudrate_as_desired(args, config):
         config[config["protocol"]]["baudrate"] = args.baudrate
     return config
 
 
-def parameter_labels() -> list[str]:
-    labels = []
-    for source in data_sources:
-        for parameter in source["parameters"]:
-            unit = parameter["unit"]
-            if unit:
-                labels.append(f"{parameter['name']} ({unit})")
+def normalize_label(title: str, units: str) -> str:
+    return f"{title} ({units})" if units else title
+
+
+class SafeExpression:
+    ALLOWED_NODES = (
+        ast.Expression,
+        ast.BinOp,
+        ast.UnaryOp,
+        ast.Add,
+        ast.Sub,
+        ast.Mult,
+        ast.Div,
+        ast.Pow,
+        ast.USub,
+        ast.UAdd,
+        ast.Load,
+        ast.Name,
+        ast.Constant,
+    )
+
+    def __init__(self, expression: str):
+        self.expression = expression.strip()
+        parsed = ast.parse(self.expression, mode="eval")
+        for node in ast.walk(parsed):
+            if not isinstance(node, self.ALLOWED_NODES):
+                raise ValueError(f"Unsupported expression node: {type(node).__name__}")
+        self.code = compile(parsed, "<adx-math>", "eval")
+
+    def evaluate(self, variables: dict[str, float]) -> float:
+        return eval(self.code, {"__builtins__": {}}, variables)
+
+
+class AdxValueDefinition:
+    def __init__(
+        self,
+        *,
+        value_id: str,
+        id_hash: str,
+        title: str,
+        units: str,
+        packet_offset: int | None,
+        size_bits: int,
+        signed: bool,
+        lsb_first: bool,
+        equation: str | None,
+        variables: list[dict[str, str]],
+    ):
+        self.value_id = value_id
+        self.id_hash = id_hash
+        self.title = title
+        self.units = units
+        self.label = normalize_label(title, units)
+        self.packet_offset = packet_offset
+        self.size_bits = size_bits
+        self.signed = signed
+        self.lsb_first = lsb_first
+        self.variables = variables
+        self.expression = SafeExpression(equation) if equation else None
+
+    def extract_native(self, payload: bytes) -> int:
+        if self.packet_offset is None:
+            raise ValueError(f"{self.value_id} has no packet offset")
+        byte_count = max(1, self.size_bits // 8)
+        chunk = payload[self.packet_offset : self.packet_offset + byte_count]
+        if len(chunk) < byte_count:
+            raise ValueError(f"{self.value_id} payload too short")
+        byteorder = "little" if self.lsb_first else "little"
+        return int.from_bytes(chunk, byteorder=byteorder, signed=self.signed)
+
+
+class AdxDecoder:
+    def __init__(self, definitions: list[AdxValueDefinition], excluded_ids: list[str] | None = None):
+        self.by_id = {definition.value_id: definition for definition in definitions}
+        self.by_hash = {definition.id_hash.upper(): definition for definition in definitions if definition.id_hash}
+        excluded = set(excluded_ids or [])
+        self.selected_ids = [definition.value_id for definition in definitions if definition.value_id not in excluded]
+
+    def labels(self) -> list[str]:
+        return [self.by_id[value_id].label for value_id in self.selected_ids]
+
+    def decode(self, payload: bytes) -> list[float | None]:
+        cache: dict[str, float | None] = {}
+        return [self._decode_value(self.by_id[value_id], payload, cache) for value_id in self.selected_ids]
+
+    def _decode_value(
+        self,
+        definition: AdxValueDefinition,
+        payload: bytes,
+        cache: dict[str, float | None],
+    ) -> float | None:
+        if definition.value_id in cache:
+            return cache[definition.value_id]
+
+        try:
+            if not definition.expression:
+                result = float(definition.extract_native(payload))
             else:
-                labels.append(parameter["name"])
-    return labels
+                variables: dict[str, float] = {}
+                for variable in definition.variables:
+                    var_id = variable.get("varID", "")
+                    var_type = variable.get("type", "native")
+                    if var_type == "native":
+                        variables[var_id] = float(definition.extract_native(payload))
+                    elif var_type == "link":
+                        link_hash = (variable.get("linkIDHash") or "").upper()
+                        linked_definition = self.by_hash.get(link_hash)
+                        if linked_definition is None:
+                            raise ValueError(f"Missing link target {link_hash}")
+                        linked_value = self._decode_value(linked_definition, payload, cache)
+                        if linked_value is None:
+                            raise ValueError(f"Linked value missing for {link_hash}")
+                        variables[var_id] = float(linked_value)
+                    else:
+                        raise ValueError(f"Unsupported variable type {var_type}")
+                result = float(definition.expression.evaluate(variables))
+        except Exception:
+            result = None
+
+        cache[definition.value_id] = result
+        return result
 
 
-def poll_values(ecu) -> list[float]:
-    values = []
-    for source in data_sources:
-        raw_data = ecu.bus.execute(source["payload"]).get_data()
-        for parameter in source["parameters"]:
-            value = grab(raw_data, parameter)
-            values.append(convert(value, parameter))
-    return values
+def load_adx_decoder(adx_path: str, excluded_ids: list[str] | None = None) -> AdxDecoder:
+    path = Path(adx_path)
+    if not path.is_absolute():
+        path = BASE_DIR / path
+    tree = yaml = None
+    import xml.etree.ElementTree as ET
+
+    tree = ET.parse(path)
+    root = tree.getroot()
+    defaults = root.find("ADXHEADER/DEFAULTS")
+    default_size_bits = int(defaults.get("datasizeinbits", "8")) if defaults is not None else 8
+    default_signed = (defaults.get("signed", "0") == "1") if defaults is not None else False
+    default_lsb_first = (defaults.get("lsbfirst", "0") == "1") if defaults is not None else False
+
+    definitions: list[AdxValueDefinition] = []
+    for value in root.findall(".//ADXVALUE"):
+        value_id = value.get("id")
+        if not value_id:
+            continue
+        math_node = value.find("MATH")
+        equation = math_node.get("equation") if math_node is not None else None
+        variables = [node.attrib for node in math_node.findall("VAR")] if math_node is not None else []
+        packet_offset_text = value.findtext("packetoffset")
+        packet_offset = int(packet_offset_text, 16) if packet_offset_text else None
+        size_bits = int(value.findtext("sizeinbits") or default_size_bits)
+        signed_text = value.findtext("signed")
+        signed = default_signed if signed_text is None else signed_text == "1"
+        lsb_first_text = value.findtext("lsbfirst")
+        lsb_first = default_lsb_first if lsb_first_text is None else lsb_first_text == "1"
+        units = value.findtext("units") or ""
+        definitions.append(
+            AdxValueDefinition(
+                value_id=value_id,
+                id_hash=(value.get("idhash") or "").upper(),
+                title=value.get("title") or value_id,
+                units=units,
+                packet_offset=packet_offset,
+                size_bits=size_bits,
+                signed=signed,
+                lsb_first=lsb_first,
+                equation=equation,
+                variables=variables,
+            )
+        )
+    return AdxDecoder(definitions, excluded_ids)
 
 
-def poll_sample(ecu) -> dict:
-    values = []
+def should_treat_baudrate_as_desired(args: argparse.Namespace, config: dict) -> bool:
+    if args.desired_baudrate is not None:
+        return False
+    if config.get("protocol") != "kline":
+        return False
+    return args.baudrate in BAUDRATES.values()
+
+
+def resolve_desired_baudrate_index(args: argparse.Namespace, config: dict) -> int | None:
+    if args.desired_baudrate is not None:
+        return args.desired_baudrate
+    if not should_treat_baudrate_as_desired(args, config):
+        return None
+    for index, baudrate in BAUDRATES.items():
+        if baudrate == args.baudrate:
+            return index
+    return None
+
+
+def poll_sample(ecu, decoder: AdxDecoder) -> dict:
     raw_packets = []
     for index, source in enumerate(data_sources):
         raw_data = ecu.bus.execute(source["payload"]).get_data()
@@ -76,9 +254,8 @@ def poll_sample(ecu) -> dict:
                 "hex": raw_data.hex().upper(),
             }
         )
-        for parameter in source["parameters"]:
-            value = grab(raw_data, parameter)
-            values.append(convert(value, parameter))
+    primary_payload = bytes.fromhex(raw_packets[0]["hex"]) if raw_packets else b""
+    values = decoder.decode(primary_payload) if raw_packets else []
     return {"values": values, "raw_packets": raw_packets}
 
 
@@ -93,10 +270,12 @@ def setup_ecu(config: dict, args: argparse.Namespace):
     )
     bus.transport.set_buffer_size(20)
 
-    if args.desired_baudrate is not None:
+    desired_baudrate_index = resolve_desired_baudrate_index(args, config)
+
+    if desired_baudrate_index is not None:
         try:
             desired_baudrate = DesiredBaudrate(
-                index=args.desired_baudrate, baudrate=BAUDRATES[args.desired_baudrate]
+                index=desired_baudrate_index, baudrate=BAUDRATES[desired_baudrate_index]
             )
         except KeyError:
             raise ValueError("Selected baudrate is invalid.")
@@ -174,11 +353,12 @@ def enable_security_access_compat(bus: kwp2000.Kwp2000Protocol) -> None:
 
 
 class LogState:
-    def __init__(self, labels: list[str], interval_ms: int, config: dict, args: argparse.Namespace):
+    def __init__(self, labels: list[str], interval_ms: int, config: dict, args: argparse.Namespace, decoder: AdxDecoder):
         self.labels = labels
         self.interval_ms = interval_ms
         self.config = config
         self.args = args
+        self.decoder = decoder
         self.last = None
         self.error = None
         self.running = True
@@ -194,7 +374,7 @@ class LogState:
 def log_loop(state: LogState, ecu):
     try:
         while state.running and state.connected:
-            sample = poll_sample(ecu)
+            sample = poll_sample(ecu, state.decoder)
             payload = {
                 "ts": int(time.time() * 1000),
                 "values": sample["values"],
@@ -424,22 +604,30 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("-b", "--baudrate", type=int)
     parser.add_argument("--desired-baudrate", type=lambda x: int(x, 0))
     parser.add_argument("-c", "--config", default="gkflasher.yml")
+    parser.add_argument("--logger-config", default="excluded_pids.yml")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--interval", type=int, default=200, help="Polling interval in ms (0 = max speed)")
+    parser.add_argument("--interval", type=int, default=0, help="Polling interval in ms (0 = max speed)")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     config = build_config(args)
+    logger_config = load_optional_config(args.logger_config)
+    adx_path = logger_config.get("adx_path")
+    if not adx_path:
+        print("[!] Missing 'adx_path' in logger config")
+        return 1
+    excluded_ids = logger_config.get("excluded_pids") or None
+    decoder = load_adx_decoder(adx_path, excluded_ids)
 
     index_path = BASE_DIR / "web" / "index.html"
     if not index_path.exists():
         print(f"[!] Missing UI at {index_path}")
         return 1
 
-    state = LogState(parameter_labels(), args.interval, config, args)
+    state = LogState(decoder.labels(), args.interval, config, args, decoder)
 
     server = ThreadingHTTPServer((args.host, args.port), make_handler(state, index_path))
     print(f"[*] Server running at http://{args.host}:{args.port}")
