@@ -79,6 +79,31 @@
         margin-top: 0;
       }
 
+      .settings-grid {
+        display: grid;
+        gap: 16px;
+        max-width: 560px;
+      }
+
+      .settings-section {
+        display: grid;
+        gap: 10px;
+        padding: 14px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .settings-section strong {
+        font-size: 14px;
+        letter-spacing: 0.04em;
+      }
+
+      .settings-help {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
       .button {
         border: none;
         border-radius: 999px;
@@ -102,6 +127,32 @@
         flex: 1;
         min-height: 0;
         gap: 16px;
+      }
+
+      .footer-bar {
+        padding: 10px clamp(16px, 4vw, 48px) 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .footer-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .footer-status {
+        font-size: 13px;
+        color: var(--muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .hidden-input {
+        display: none;
       }
 
       .card {
@@ -412,8 +463,12 @@
         padding: 10px 12px;
         color: var(--text);
         font-size: 12px;
-        transform: translate(-50%, -110%);
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
         white-space: nowrap;
+        max-width: calc(100% - 24px);
+        z-index: 2;
       }
 
       .chart-tooltip strong {
@@ -434,6 +489,128 @@
         display: flex;
         align-items: center;
         gap: 12px;
+      }
+
+      .monitor-panel {
+        display: none;
+        flex-direction: column;
+        gap: 14px;
+        height: 100%;
+        min-height: 0;
+      }
+
+      .monitor-panel.active {
+        display: flex;
+      }
+
+      .monitor-toolbar {
+        display: grid;
+        gap: 8px;
+      }
+
+      .monitor-toolbar label {
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .monitor-zoom {
+        width: 100%;
+        accent-color: var(--accent);
+      }
+
+      .monitor-shell {
+        flex: 1;
+        min-height: 0;
+        display: grid;
+        gap: 10px;
+      }
+
+      .monitor-stack {
+        min-height: 0;
+        overflow: auto;
+        display: grid;
+        gap: 10px;
+        padding-right: 4px;
+      }
+
+      .monitor-chart {
+        min-height: 140px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background:
+          linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px) 0 0 / 100% 28px,
+          linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px) 0 0 / 48px 100%,
+          linear-gradient(180deg, rgba(22, 38, 54, 0.96), rgba(9, 18, 28, 0.96));
+        padding: 12px 14px;
+        display: grid;
+        align-content: space-between;
+        gap: 10px;
+      }
+
+      .monitor-chart-body {
+        display: grid;
+        align-content: center;
+        justify-items: start;
+        min-height: 80px;
+        color: rgba(255, 255, 255, 0.42);
+        font-size: 13px;
+        gap: 8px;
+      }
+
+      .monitor-chart-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .monitor-chart-tag {
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(255, 179, 71, 0.16);
+        border: 1px solid rgba(255, 179, 71, 0.3);
+        color: var(--text);
+        font-size: 12px;
+      }
+
+      .monitor-chart-axis {
+        display: flex;
+        justify-content: space-between;
+        color: var(--muted);
+        font-size: 11px;
+        letter-spacing: 0.04em;
+      }
+
+      .monitor-nav {
+        display: grid;
+        gap: 8px;
+      }
+
+      .monitor-nav-track {
+        position: relative;
+        height: 18px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .monitor-nav-window {
+        position: absolute;
+        top: 1px;
+        bottom: 1px;
+        min-width: 24px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(255, 179, 71, 0.92), rgba(255, 218, 161, 0.92));
+        box-shadow: 0 0 12px rgba(255, 179, 71, 0.25);
+      }
+
+      .monitor-nav-slider {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        margin: 0;
+        opacity: 0;
+        cursor: pointer;
       }
 
       #chart-slider {
@@ -524,6 +701,7 @@
     <main>
       <div class="tabs">
         <button class="tab" data-tab="overview">Overview</button>
+        <button class="tab" data-tab="monitor">Monitor</button>
         <button class="tab active" data-tab="raw">Raw Data</button>
         <button class="tab" data-tab="settings">Settings</button>
       </div>
@@ -531,7 +709,6 @@
       <div class="card tab-panel panel-split" data-panel="overview">
         <div class="panel-header">
           <strong>Panel</strong>
-          <button class="button" id="panel-settings">Settings</button>
         </div>
         <div class="panel-grid" id="panel-grid"></div>
         <div class="panel-splitter" id="panel-splitter">
@@ -544,6 +721,26 @@
           </div>
           <div class="chart-controls">
             <button class="button" id="chart-toggle">Pause</button>
+            <button class="button" id="record-toggle">Start recording</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card tab-panel monitor-panel" data-panel="monitor">
+        <div class="panel-header">
+          <strong>Monitor</strong>
+        </div>
+        <div class="monitor-toolbar">
+          <label for="monitor-zoom-slider">Zoom</label>
+          <input class="monitor-zoom" id="monitor-zoom-slider" type="range" min="1" max="12" step="1" value="1" />
+        </div>
+        <div class="monitor-shell">
+          <div class="monitor-stack" id="monitor-stack"></div>
+          <div class="monitor-nav">
+            <div class="monitor-nav-track">
+              <div class="monitor-nav-window" id="monitor-nav-window"></div>
+            </div>
+            <input class="monitor-nav-slider" id="monitor-nav-slider" type="range" min="0" max="0" step="1" value="0" />
           </div>
         </div>
       </div>
@@ -570,12 +767,67 @@
       </div>
       
       <div class="card tab-panel" data-panel="settings">
-        <p>Simulation locale des donnees (sans ECU).</p>
-        <div class="controls">
-          <button class="button" id="simulate-button">Start simulation</button>
+        <div class="settings-grid">
+          <div class="settings-section">
+            <strong>Simulation</strong>
+            <p>Simulation locale des donnees (sans ECU).</p>
+            <div class="controls">
+              <button class="button" id="simulate-button">Start simulation</button>
+            </div>
+          </div>
+          <div class="settings-section">
+            <strong>Panel</strong>
+            <div class="overlay-field">
+              <label for="panel-rows">Lignes</label>
+              <input class="value-input" id="panel-rows" type="number" min="1" max="6" />
+            </div>
+            <div class="overlay-field">
+              <label for="panel-cols">Colonnes</label>
+              <input class="value-input" id="panel-cols" type="number" min="1" max="6" />
+            </div>
+            <div class="controls">
+              <button class="button" id="panel-apply">Appliquer panel</button>
+            </div>
+          </div>
+          <div class="settings-section">
+            <strong>Monitor</strong>
+            <div class="overlay-field">
+              <label for="monitor-count">Nombre de graphes</label>
+              <input class="value-input" id="monitor-count" type="number" min="1" max="12" />
+            </div>
+            <div class="settings-help">Les graphes sont vides pour le moment, comme placeholders configurables.</div>
+            <div class="overlay-field">
+              <label>Valeurs du log charge</label>
+              <div class="overlay-list" id="loaded-log-values"></div>
+            </div>
+            <div class="controls">
+              <button class="button" id="monitor-apply">Appliquer monitor</button>
+            </div>
+          </div>
+          <div class="settings-section">
+            <strong>Affichage</strong>
+            <div class="overlay-field">
+              <label for="value-refresh-rate">Refresh valeurs (ms)</label>
+              <input class="value-input" id="value-refresh-rate" type="number" min="16" max="1000" step="1" />
+            </div>
+            <div class="overlay-field">
+              <label for="chart-refresh-rate">Refresh graphique (ms)</label>
+              <input class="value-input" id="chart-refresh-rate" type="number" min="16" max="1000" step="1" />
+            </div>
+            <div class="controls">
+              <button class="button" id="display-apply">Appliquer affichage</button>
+            </div>
+          </div>
         </div>
       </div>
     </main>
+    <footer class="footer-bar">
+      <div class="footer-actions">
+        <button class="button" id="load-log-button">Load log</button>
+        <input class="hidden-input" id="load-log-input" type="file" accept=".json,application/json" />
+      </div>
+      <div class="footer-status" id="load-log-status">No log loaded</div>
+    </footer>
     <div class="overlay" id="options-overlay">
       <div class="overlay-card">
         <div class="panel-header">
@@ -626,25 +878,6 @@
         </div>
       </div>
     </div>
-    <div class="overlay" id="panel-overlay">
-      <div class="overlay-card">
-        <div class="panel-header">
-          <strong>Panel settings</strong>
-          <button class="button" id="panel-close">Fermer</button>
-        </div>
-        <div class="overlay-field">
-          <label for="panel-rows">Lignes</label>
-          <input class="value-input" id="panel-rows" type="number" min="1" max="6" />
-        </div>
-        <div class="overlay-field">
-          <label for="panel-cols">Colonnes</label>
-          <input class="value-input" id="panel-cols" type="number" min="1" max="6" />
-        </div>
-        <div class="overlay-actions">
-          <button class="button" id="panel-apply">Appliquer</button>
-        </div>
-      </div>
-    </div>
     <div class="overlay" id="cell-overlay">
       <div class="overlay-card">
         <div class="panel-header">
@@ -657,6 +890,18 @@
         </div>
         <div class="overlay-actions">
           <button class="button" id="cell-apply">Appliquer</button>
+        </div>
+      </div>
+    </div>
+    <div class="overlay" id="monitor-series-overlay">
+      <div class="overlay-card">
+        <div class="panel-header">
+          <strong id="monitor-series-title">Monitor values</strong>
+          <button class="button" id="monitor-series-close">Fermer</button>
+        </div>
+        <div class="overlay-list" id="monitor-series-list"></div>
+        <div class="overlay-actions">
+          <button class="button" id="monitor-series-apply">Appliquer</button>
         </div>
       </div>
     </div>
@@ -681,6 +926,9 @@
       const bleLogOverlay = document.getElementById("ble-log-overlay");
       const bleLogClose = document.getElementById("ble-log-close");
       const bleLogContent = document.getElementById("ble-log-content");
+      const loadLogButton = document.getElementById("load-log-button");
+      const loadLogInput = document.getElementById("load-log-input");
+      const loadLogStatus = document.getElementById("load-log-status");
       const valueOverlay = document.getElementById("value-overlay");
       const valueTitle = document.getElementById("value-title");
       const valueDecimals = document.getElementById("value-decimals");
@@ -690,18 +938,31 @@
       const valueSave = document.getElementById("value-save");
       const valueClear = document.getElementById("value-clear");
       const valueClose = document.getElementById("value-close");
-      const panelSettings = document.getElementById("panel-settings");
-      const panelOverlay = document.getElementById("panel-overlay");
       const panelRows = document.getElementById("panel-rows");
       const panelCols = document.getElementById("panel-cols");
       const panelApply = document.getElementById("panel-apply");
-      const panelClose = document.getElementById("panel-close");
+      const monitorCount = document.getElementById("monitor-count");
+      const monitorApply = document.getElementById("monitor-apply");
+      const loadedLogValues = document.getElementById("loaded-log-values");
+      const valueRefreshRate = document.getElementById("value-refresh-rate");
+      const chartRefreshRate = document.getElementById("chart-refresh-rate");
+      const displayApply = document.getElementById("display-apply");
       const panelGrid = document.getElementById("panel-grid");
       const panelBottom = document.querySelector(".panel-bottom");
       const panelSplitter = document.getElementById("panel-splitter");
       const chartRoot = document.getElementById("history-chart");
       const chartTooltip = document.getElementById("chart-tooltip");
       const chartToggle = document.getElementById("chart-toggle");
+      const recordToggle = document.getElementById("record-toggle");
+      const monitorStack = document.getElementById("monitor-stack");
+      const monitorZoomSlider = document.getElementById("monitor-zoom-slider");
+      const monitorNavSlider = document.getElementById("monitor-nav-slider");
+      const monitorNavWindow = document.getElementById("monitor-nav-window");
+      const monitorSeriesOverlay = document.getElementById("monitor-series-overlay");
+      const monitorSeriesTitle = document.getElementById("monitor-series-title");
+      const monitorSeriesList = document.getElementById("monitor-series-list");
+      const monitorSeriesApply = document.getElementById("monitor-series-apply");
+      const monitorSeriesClose = document.getElementById("monitor-series-close");
       const cellOverlay = document.getElementById("cell-overlay");
       const cellTitle = document.getElementById("cell-title");
       const cellSelect = document.getElementById("cell-select");
@@ -718,6 +979,8 @@
       let baseLabels = [];
       const bleExtraLabels = [];
       const bleExtraValues = new Map();
+      const bleHistoryAnchors = new Map();
+      const simHistoryAnchors = new Map();
       let simulateOn = false;
       let simulateTimer = null;
       const simState = {
@@ -745,6 +1008,8 @@
       let activeValueLabel = null;
       const panelConfig = { rows: 2, cols: 3, assignments: [] };
       const panelStorageKey = "gkflasher.panelConfig";
+      const monitorConfig = { count: 4, zoom: 1, offset: 0, assignments: [] };
+      const monitorStorageKey = "gkflasher.monitorConfig";
       const panelSplitKey = "gkflasher.panelSplit";
       let panelCells = [];
       let activePanelCellIndex = null;
@@ -764,9 +1029,20 @@
       let pauseStartTs = null;
       let pauseLatestTs = null;
       let chartLastTs = null;
+      let valueRenderPending = false;
+      let pendingValueSample = null;
+      let lastValueRender = 0;
       let chartRenderPending = false;
       let chartLastRender = 0;
-      const chartRenderIntervalMs = 50;
+      let valueRenderIntervalMs = 80;
+      let chartRenderIntervalMs = 50;
+      const historyMergeThresholdMs = 80;
+      const displaySettingsKey = "gkflasher.displaySettings";
+      let isRecording = false;
+      let recordedEvents = [];
+      let loadedLogData = null;
+      let loadedLogLabels = [];
+      let activeMonitorChartIndex = null;
 
       const engineDisplacementL = 1.975;
       const engineCylinders = 4;
@@ -900,6 +1176,28 @@
       let bleBuffer = "";
       const bleLogLines = [];
       const bleLogMax = 500;
+      const simulatedBleFields = [
+        "key_on",
+        "rpm_signal_erro",
+        "tcs_ack",
+        "fuel_cut_active",
+        "ac_relay_active",
+        "torque_calc_err",
+        "rpm",
+        "vehicle_speed",
+        "coolant_temp",
+        "pedal_position",
+        "atmospheric_pre",
+        "indexed_engine_",
+        "indicated_engin",
+        "theoretical_eng",
+        "torque_losses",
+        "air_temp",
+        "air_pressure",
+        "oil_pressure",
+        "AFR",
+        "intake_air_temp",
+      ];
 
       function appendBleLog(line) {
         if (!bleLogContent) {
@@ -916,57 +1214,228 @@
         bleLogContent.scrollTop = bleLogContent.scrollHeight;
       }
 
+      function interpolateBleSeriesSegment(label, nextTs, nextValue) {
+        const previous = bleHistoryAnchors.get(label);
+        if (!previous || !Number.isFinite(previous.ts) || !Number.isFinite(previous.value)) {
+          return;
+        }
+        if (!Number.isFinite(nextTs) || !Number.isFinite(nextValue) || nextTs <= previous.ts) {
+          return;
+        }
+        const series = historySeries.get(label);
+        if (!series || series.length !== historyTimestamps.length) {
+          return;
+        }
+        const span = nextTs - previous.ts;
+        if (span <= 0) {
+          return;
+        }
+        for (let i = 0; i < historyTimestamps.length; i += 1) {
+          const ts = historyTimestamps[i];
+          if (ts <= previous.ts || ts >= nextTs) {
+            continue;
+          }
+          if (!Number.isFinite(series[i])) {
+            continue;
+          }
+          const ratio = (ts - previous.ts) / span;
+          series[i] = previous.value + (nextValue - previous.value) * ratio;
+        }
+      }
+
+      function interpolateSeriesSegment(label, previous, nextTs, nextValue) {
+        if (!previous || !Number.isFinite(previous.ts) || !Number.isFinite(previous.value)) {
+          return;
+        }
+        if (!Number.isFinite(nextTs) || !Number.isFinite(nextValue) || nextTs <= previous.ts) {
+          return;
+        }
+        const series = historySeries.get(label);
+        if (!series || series.length !== historyTimestamps.length) {
+          return;
+        }
+        const span = nextTs - previous.ts;
+        if (span <= 0) {
+          return;
+        }
+        for (let i = 0; i < historyTimestamps.length; i += 1) {
+          const ts = historyTimestamps[i];
+          if (ts <= previous.ts || ts >= nextTs) {
+            continue;
+          }
+          if (!Number.isFinite(series[i])) {
+            continue;
+          }
+          const ratio = (ts - previous.ts) / span;
+          series[i] = previous.value + (nextValue - previous.value) * ratio;
+        }
+      }
+
+      function interpolateSimulatedEcuSample(sample) {
+        if (!sample || !Array.isArray(sample.values)) {
+          return;
+        }
+        baseLabels.forEach((label, index) => {
+          const value = Number(sample.values[index]);
+          if (!Number.isFinite(value)) {
+            if (Number.isFinite(value)) {
+              simHistoryAnchors.set(label, { ts: sample.ts, value });
+            }
+            return;
+          }
+          interpolateSeriesSegment(label, simHistoryAnchors.get(label), sample.ts, value);
+          simHistoryAnchors.set(label, { ts: sample.ts, value });
+        });
+      }
+
+      function getRandomSimulationDelayMs() {
+        const hz = 7 + Math.random() * 3;
+        return Math.round(1000 / hz);
+      }
+
+      function scheduleSimulationTick() {
+        if (!simulateOn) {
+          return;
+        }
+        simulateTimer = setTimeout(() => {
+          if (!simulateOn) {
+            return;
+          }
+          updateSimState();
+          const now = Date.now();
+          if (baseLabels.length) {
+            const values = baseLabels.map(generateValue);
+            const ecuSample = { ts: now, values };
+            interpolateSimulatedEcuSample(ecuSample);
+            updateValues(ecuSample);
+          }
+          handleBlePayload(buildSimulatedBlePayload(), now);
+          sampleCount += 1;
+          scheduleSimulationTick();
+        }, getRandomSimulationDelayMs());
+      }
+
+      function applyBleValues(entries, timestamp = Date.now()) {
+        if (!entries.length) {
+          return;
+        }
+        const updatedLabels = entries.map(({ label }) => label).concat(computedDefs.map((def) => def.label));
+        let hasNewLabel = false;
+        entries.forEach(({ label, value }) => {
+          if (!label || !Number.isFinite(value)) {
+            return;
+          }
+          interpolateBleSeriesSegment(label, timestamp, value);
+          if (!bleExtraValues.has(label)) {
+            bleExtraLabels.push(label);
+            hasNewLabel = true;
+          }
+          bleExtraValues.set(label, value);
+          bleHistoryAnchors.set(label, { ts: timestamp, value });
+        });
+        if (hasNewLabel) {
+          buildTable(extendLabels(getCombinedLabels()));
+        }
+        entries.forEach(({ label, value }) => {
+          const cell = valueCellMap.get(label);
+          if (cell) {
+            cell.textContent = formatValue(value, label);
+          }
+        });
+        if (lastSample) {
+          entries.forEach(({ label, value }) => {
+            const idx = labelIndexMap.get(label);
+            if (idx !== undefined) {
+              lastSample.values[idx] = value;
+            }
+          });
+          scheduleValueRender(lastSample);
+          recordUpdatedValues({ ts: timestamp, values: lastSample.values.slice() }, updatedLabels, "ble");
+          updateHistoryChart({ ts: timestamp, values: lastSample.values.slice() }, updatedLabels);
+          return;
+        }
+        if (currentLabels.length) {
+          const values = currentLabels.map((name) => bleExtraValues.get(name) ?? "--");
+          lastSample = { ts: timestamp, values };
+          scheduleValueRender(lastSample, true);
+          recordUpdatedValues(lastSample, updatedLabels, "ble");
+          updateHistoryChart(lastSample, updatedLabels);
+        }
+      }
+
+      function parseBleSegment(segment) {
+        if (!segment) {
+          return null;
+        }
+        const trimmed = segment.trim().replace(/\+$/, "").trim();
+        if (!trimmed) {
+          return null;
+        }
+        const quotedEqualsMatch = trimmed.match(/^"([^"]+)"\s*=\s*([-+]?\d+(?:\.\d+)?)/);
+        const colonMatch = trimmed.match(/^([^:]+?)\s*:\s*([-+]?\d+(?:\.\d+)?)/);
+        const match = quotedEqualsMatch || colonMatch;
+        if (!match) {
+          return null;
+        }
+        const label = match[1].trim();
+        const value = Number(match[2]);
+        if (!label || !Number.isFinite(value)) {
+          return null;
+        }
+        return { label, value };
+      }
+
+      function consumeBleBuffer() {
+        const timestamp = Date.now();
+        const normalized = bleBuffer.replace(/\r/g, "\n");
+        const segments = normalized.split(";");
+        bleBuffer = segments.pop() ?? "";
+        const entries = [];
+        segments.forEach((segment) => {
+          const trimmed = segment.trim();
+          if (!trimmed) {
+            return;
+          }
+          appendBleLog(trimmed);
+          const entry = parseBleSegment(trimmed);
+          if (entry) {
+            entries.push(entry);
+          }
+        });
+        applyBleValues(entries, timestamp);
+      }
+
+      function handleBlePayload(payload, timestamp = Date.now()) {
+        if (!payload) {
+          return;
+        }
+        const entries = [];
+        payload.split(";").forEach((segment) => {
+          const trimmed = segment.trim();
+          if (!trimmed) {
+            return;
+          }
+          appendBleLog(trimmed);
+          const entry = parseBleSegment(trimmed);
+          if (entry) {
+            entries.push(entry);
+          }
+        });
+        applyBleValues(entries, timestamp);
+      }
+
       function onBleNotify(event) {
         const data = event.target.value;
         if (!data) {
           return;
         }
         bleBuffer += bleDecoder.decode(data, { stream: true });
-        let idx = 0;
-        while ((idx = bleBuffer.indexOf("\n")) >= 0) {
-          const line = bleBuffer.slice(0, idx).trim();
-          bleBuffer = bleBuffer.slice(idx + 1);
-          if (line) {
-            appendBleLog(line);
-            handleBleLogLine(line);
-          }
-        }
+        consumeBleBuffer();
       }
 
 
       function handleBleLogLine(line) {
-        const match = line.match(/^\s*([^:]+?)\s*:\s*([-+]?\d+(?:\.\d+)?)/);
-        if (!match) {
-          return;
-        }
-        const label = match[1].trim();
-        const value = Number(match[2]);
-        if (!label || !Number.isFinite(value)) {
-          return;
-        }
-        const isNew = !bleExtraValues.has(label);
-        bleExtraValues.set(label, value);
-        if (isNew) {
-          bleExtraLabels.push(label);
-          buildTable(extendLabels(getCombinedLabels()));
-          return;
-        }
-        const cell = valueCellMap.get(label);
-        if (cell) {
-          cell.textContent = formatValue(value, label);
-        }
-        const idx = labelIndexMap.get(label);
-        if (lastSample && idx !== undefined) {
-          lastSample.values[idx] = value;
-          updatePanelValues(lastSample);
-          const chartSample = { ts: Date.now(), values: lastSample.values.slice() };
-          updateHistoryChart(chartSample);
-        } else if (!lastSample && currentLabels.length) {
-          const values = currentLabels.map((name) => bleExtraValues.get(name) ?? "--");
-          lastSample = { ts: Date.now(), values };
-          updatePanelValues(lastSample);
-          updateHistoryChart(lastSample);
-        }
+        handleBlePayload(line);
       }
 
       function setBleStatus(textValue) {
@@ -1087,7 +1556,49 @@
         return num.toFixed(decimals);
       }
 
-      function updateValues(sample) {
+      function renderLiveValues(sample) {
+        if (!labelsReady) {
+          return;
+        }
+        currentLabels.forEach((label, index) => {
+          const cell = valueCellMap.get(label);
+          if (!cell) {
+            return;
+          }
+          const value = sample.values[index];
+          cell.textContent = formatValue(value, label);
+        });
+        const date = new Date(sample.ts);
+        timestampEl.textContent = `Last update: ${date.toLocaleTimeString()}`;
+        updatePanelValues(sample);
+      }
+
+      function scheduleValueRender(sample, immediate = false) {
+        pendingValueSample = sample;
+        if (immediate) {
+          valueRenderPending = false;
+          lastValueRender = performance.now();
+          renderLiveValues(sample);
+          return;
+        }
+        if (valueRenderPending) {
+          return;
+        }
+        valueRenderPending = true;
+        requestAnimationFrame((ts) => {
+          valueRenderPending = false;
+          if (ts - lastValueRender < valueRenderIntervalMs) {
+            scheduleValueRender(pendingValueSample);
+            return;
+          }
+          lastValueRender = ts;
+          if (pendingValueSample) {
+            renderLiveValues(pendingValueSample);
+          }
+        });
+      }
+
+      function updateValues(sample, options = {}) {
         if (!labelsReady) {
           return;
         }
@@ -1097,18 +1608,13 @@
         const derived = computeDerivedValues(combinedLabels, combinedValues);
         const extendedSample = { ts: sample.ts, values: combinedValues.concat(derived) };
         lastSample = extendedSample;
-        currentLabels.forEach((label, index) => {
-          const cell = valueCellMap.get(label);
-          if (!cell) {
-            return;
-          }
-          const value = extendedSample.values[index];
-          cell.textContent = formatValue(value, label);
-        });
-        const date = new Date(sample.ts);
-        timestampEl.textContent = `Last update: ${date.toLocaleTimeString()}`;
-        updatePanelValues(extendedSample);
-        updateHistoryChart(extendedSample);
+        scheduleValueRender(extendedSample, options.immediate === true);
+        if (options.skipHistory === true) {
+          return;
+        }
+        const updatedLabels = options.updatedLabels || baseLabels.concat(computedDefs.map((def) => def.label));
+        recordUpdatedValues(extendedSample, updatedLabels, options.source || "ecu");
+        updateHistoryChart(extendedSample, updatedLabels);
       }
 
       async function fetchStatus() {
@@ -1226,29 +1732,92 @@
         return Number((simState.load * 100).toFixed(1));
       }
 
-      function startSimulation() {
-        if (!labelsReady) {
-          setStatus("No labels yet", "warn");
-          return;
+      function generateSimBleValue(label) {
+        const name = label.toLowerCase();
+        if (name === "key_on") {
+          return 1;
         }
+        if (name === "rpm_signal_erro" || name === "torque_calc_err") {
+          return 0;
+        }
+        if (name === "tcs_ack") {
+          return simState.speed > 5 ? 1 : 0;
+        }
+        if (name === "fuel_cut_active") {
+          return simState.rpm > 5000 ? 1 : 0;
+        }
+        if (name === "ac_relay_active") {
+          return simState.coolant > 85 ? 1 : 0;
+        }
+        if (name === "rpm") {
+          return Math.round(simState.rpm);
+        }
+        if (name === "vehicle_speed") {
+          return Math.round(simState.speed);
+        }
+        if (name === "coolant_temp") {
+          return Number(simState.coolant.toFixed(1));
+        }
+        if (name === "pedal_position") {
+          return Number((simState.load * 100).toFixed(1));
+        }
+        if (name === "atmospheric_pre") {
+          return 860;
+        }
+        if (name === "indexed_engine_") {
+          return Number((simState.load * 55).toFixed(1));
+        }
+        if (name === "indicated_engin") {
+          return Number((simState.load * 48).toFixed(1));
+        }
+        if (name === "theoretical_eng") {
+          return Number((40 + simState.load * 25).toFixed(1));
+        }
+        if (name === "torque_losses") {
+          return Number((12 + simState.load * 10).toFixed(1));
+        }
+        if (name === "air_temp") {
+          return Number((22 + simState.load * 12).toFixed(2));
+        }
+        if (name === "air_pressure") {
+          return Number((0.05 + simState.load * 0.25).toFixed(2));
+        }
+        if (name === "oil_pressure") {
+          return Number((0.02 + simState.load * 0.35).toFixed(2));
+        }
+        if (name === "afr") {
+          return Number((14.7 + Math.sin(simState.t) * 3.8).toFixed(2));
+        }
+        if (name === "intake_air_temp") {
+          return Number(simState.intake.toFixed(1));
+        }
+        return Number((simState.load * 100).toFixed(1));
+      }
+
+      function buildSimulatedBlePayload() {
+        return simulatedBleFields
+          .map((label) => `"${label}"=${generateSimBleValue(label)}`)
+          .join(";");
+      }
+
+      function startSimulation() {
         simulateOn = true;
+        simHistoryAnchors.clear();
         simulateButton.textContent = "Stop simulation";
         setStatus("Simulation", "warn");
-        simulateTimer = setInterval(() => {
-          updateSimState();
-          const labels = baseLabels.length ? baseLabels : currentLabels;
-          const values = labels.map(generateValue);
-          updateValues({ ts: Date.now(), values });
-          sampleCount += 1;
-        }, 200);
+        setBleStatus("simulated");
+        scheduleSimulationTick();
       }
 
       function stopSimulation() {
         simulateOn = false;
         simulateButton.textContent = "Start simulation";
         if (simulateTimer) {
-          clearInterval(simulateTimer);
+          clearTimeout(simulateTimer);
           simulateTimer = null;
+        }
+        if (!bleDevice || !bleDevice.gatt || !bleDevice.gatt.connected) {
+          setBleStatus("off");
         }
         fetchStatus();
       }
@@ -1552,6 +2121,184 @@
         }
       }
 
+      function setRecordingUiState() {
+        if (recordToggle) {
+          recordToggle.textContent = isRecording ? "Stop recording" : "Start recording";
+        }
+      }
+
+      function recordUpdatedValues(sample, updatedLabels, source) {
+        if (!isRecording || !sample || !updatedLabels) {
+          return;
+        }
+        const labels = Array.from(new Set(updatedLabels));
+        const values = {};
+        labels.forEach((label) => {
+          if (hiddenLabels.has(label)) {
+            return;
+          }
+          const idx = labelIndexMap.get(label);
+          if (idx === undefined) {
+            return;
+          }
+          const value = sample.values[idx];
+          if (value === undefined || value === "--") {
+            return;
+          }
+          values[label] = value;
+        });
+        if (!Object.keys(values).length) {
+          return;
+        }
+        recordedEvents.push({
+          ts: sample.ts,
+          source,
+          values,
+        });
+      }
+
+      function downloadRecordedLog() {
+        const payload = {
+          exported_at: new Date().toISOString(),
+          labels: currentLabels.filter((label) => !hiddenLabels.has(label)),
+          events: recordedEvents,
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        const now = new Date();
+        const timePart = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", hour12: false }).replace(/:/g, "-");
+        const datePart = now.toLocaleDateString("fr-FR").replace(/\//g, "-");
+        link.href = url;
+        link.download = `Log ${timePart} ${datePart}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      function toggleRecording() {
+        if (isRecording) {
+          isRecording = false;
+          setRecordingUiState();
+          downloadRecordedLog();
+          recordedEvents = [];
+          return;
+        }
+        recordedEvents = [];
+        isRecording = true;
+        setRecordingUiState();
+      }
+
+      function setLoadedLogStatus(text) {
+        if (loadLogStatus) {
+          loadLogStatus.textContent = text;
+        }
+      }
+
+      function openMonitorSeriesOptions(index) {
+        if (!monitorSeriesOverlay || !monitorSeriesList) {
+          return;
+        }
+        activeMonitorChartIndex = index;
+        if (monitorSeriesTitle) {
+          monitorSeriesTitle.textContent = `Monitor ${index + 1}`;
+        }
+        renderMonitorSeriesOptions();
+        monitorSeriesOverlay.classList.add("active");
+      }
+
+      function closeMonitorSeriesOptions() {
+        if (!monitorSeriesOverlay) {
+          return;
+        }
+        monitorSeriesOverlay.classList.remove("active");
+        activeMonitorChartIndex = null;
+      }
+
+      function renderMonitorSeriesOptions() {
+        if (!monitorSeriesList) {
+          return;
+        }
+        monitorSeriesList.innerHTML = "";
+        if (!loadedLogLabels.length) {
+          const empty = document.createElement("div");
+          empty.className = "settings-help";
+          empty.textContent = "Aucune valeur disponible. Charge un log d'abord.";
+          monitorSeriesList.appendChild(empty);
+          return;
+        }
+        const selected = activeMonitorChartIndex === null ? [] : (monitorConfig.assignments[activeMonitorChartIndex] || []);
+        const group = document.createElement("section");
+        group.className = "overlay-group";
+        loadedLogLabels.forEach((label) => {
+          const item = document.createElement("label");
+          item.className = "overlay-item";
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.value = label;
+          checkbox.checked = selected.includes(label);
+          const text = document.createElement("span");
+          text.textContent = label;
+          item.appendChild(checkbox);
+          item.appendChild(text);
+          group.appendChild(item);
+        });
+        monitorSeriesList.appendChild(group);
+      }
+
+      function applyMonitorSeriesOptions() {
+        if (activeMonitorChartIndex === null || !monitorSeriesList) {
+          return;
+        }
+        const selected = Array.from(monitorSeriesList.querySelectorAll("input[type='checkbox']:checked"))
+          .map((input) => input.value);
+        monitorConfig.assignments[activeMonitorChartIndex] = selected;
+        saveMonitorConfig();
+        buildMonitorCharts();
+        closeMonitorSeriesOptions();
+      }
+
+      function handleLoadedLogFile(file) {
+        if (!file) {
+          return;
+        }
+        const reader = new FileReader();
+        reader.addEventListener("load", () => {
+          try {
+            const raw = typeof reader.result === "string" ? reader.result : "";
+            const data = JSON.parse(raw);
+            if (!data || !Array.isArray(data.events)) {
+              throw new Error("Invalid log format");
+            }
+            loadedLogData = data;
+            loadedLogLabels = Array.from(new Set(
+              data.events.flatMap((event) =>
+                event && event.values && typeof event.values === "object" ? Object.keys(event.values) : []
+              )
+            )).sort((a, b) => a.localeCompare(b));
+            const count = data.events.length;
+            setLoadedLogStatus(`${file.name} loaded (${count} events)`);
+            renderLoadedLogValues();
+            buildMonitorCharts();
+          } catch (error) {
+            loadedLogData = null;
+            loadedLogLabels = [];
+            setLoadedLogStatus(`Failed to load ${file.name}`);
+            renderLoadedLogValues();
+            buildMonitorCharts();
+          }
+        });
+        reader.addEventListener("error", () => {
+          loadedLogData = null;
+          loadedLogLabels = [];
+          setLoadedLogStatus(`Read error: ${file.name}`);
+          renderLoadedLogValues();
+          buildMonitorCharts();
+        });
+        reader.readAsText(file);
+      }
+
       function openOptions() {
         if (!optionsOverlay) {
           return;
@@ -1588,6 +2335,13 @@
         }
       }
 
+      function saveMonitorConfig() {
+        try {
+          localStorage.setItem(monitorStorageKey, JSON.stringify(monitorConfig));
+        } catch (error) {
+        }
+      }
+
       function loadPanelConfig() {
         try {
           const raw = localStorage.getItem(panelStorageKey);
@@ -1604,6 +2358,29 @@
         }
       }
 
+      function loadMonitorConfig() {
+        try {
+          const raw = localStorage.getItem(monitorStorageKey);
+          if (!raw) {
+            return;
+          }
+          const data = JSON.parse(raw);
+          if (data && Number.isInteger(data.count)) {
+            monitorConfig.count = Math.max(1, Math.min(12, data.count));
+          }
+          if (data && Number.isFinite(data.zoom)) {
+            monitorConfig.zoom = Math.max(1, Math.min(12, Number(data.zoom)));
+          }
+          if (data && Number.isFinite(data.offset)) {
+            monitorConfig.offset = Math.max(0, Number(data.offset));
+          }
+          if (data && Array.isArray(data.assignments)) {
+            monitorConfig.assignments = data.assignments.map((item) => Array.isArray(item) ? item.filter((value) => typeof value === "string") : []);
+          }
+        } catch (error) {
+        }
+      }
+
       function ensurePanelAssignments() {
         const total = panelConfig.rows * panelConfig.cols;
         while (panelConfig.assignments.length < total) {
@@ -1611,6 +2388,15 @@
         }
         if (panelConfig.assignments.length > total) {
           panelConfig.assignments = panelConfig.assignments.slice(0, total);
+        }
+      }
+
+      function ensureMonitorAssignments() {
+        while (monitorConfig.assignments.length < monitorConfig.count) {
+          monitorConfig.assignments.push([]);
+        }
+        if (monitorConfig.assignments.length > monitorConfig.count) {
+          monitorConfig.assignments = monitorConfig.assignments.slice(0, monitorConfig.count);
         }
       }
 
@@ -1685,19 +2471,8 @@
       }
 
       function openPanelSettings() {
-        if (!panelOverlay) {
-          return;
-        }
         panelRows.value = panelConfig.rows;
         panelCols.value = panelConfig.cols;
-        panelOverlay.classList.add("active");
-      }
-
-      function closePanelSettings() {
-        if (!panelOverlay) {
-          return;
-        }
-        panelOverlay.classList.remove("active");
       }
 
       function applyPanelSettings() {
@@ -1712,7 +2487,157 @@
         ensurePanelAssignments();
         savePanelConfig();
         buildPanelGrid();
-        closePanelSettings();
+        openPanelSettings();
+      }
+
+      function getMonitorWindowRatio() {
+        return 1 / Math.max(1, monitorConfig.zoom);
+      }
+
+      function renderLoadedLogValues() {
+        if (!loadedLogValues) {
+          return;
+        }
+        loadedLogValues.innerHTML = "";
+        if (!loadedLogLabels.length) {
+          const empty = document.createElement("div");
+          empty.className = "settings-help";
+          empty.textContent = "Aucune valeur de log chargee.";
+          loadedLogValues.appendChild(empty);
+          return;
+        }
+        const serverGroup = buildOptionGroup("Valeurs du log", loadedLogLabels);
+        if (serverGroup) {
+          loadedLogValues.appendChild(serverGroup);
+        }
+      }
+
+      function syncMonitorInputs() {
+        if (monitorCount) {
+          monitorCount.value = String(monitorConfig.count);
+        }
+        if (monitorZoomSlider) {
+          monitorZoomSlider.value = String(monitorConfig.zoom);
+        }
+      }
+
+      function updateMonitorViewportUi() {
+        const windowRatio = getMonitorWindowRatio();
+        const maxOffset = Math.max(0, 1 - windowRatio);
+        monitorConfig.offset = Math.max(0, Math.min(maxOffset, monitorConfig.offset));
+        if (monitorNavSlider) {
+          monitorNavSlider.max = String(Math.max(0, Math.round(maxOffset * 1000)));
+          monitorNavSlider.value = String(Math.round(monitorConfig.offset * 1000));
+        }
+        if (monitorNavWindow) {
+          monitorNavWindow.style.width = `${windowRatio * 100}%`;
+          monitorNavWindow.style.left = `${(maxOffset > 0 ? monitorConfig.offset / maxOffset : 0) * (100 - windowRatio * 100)}%`;
+        }
+      }
+
+      function buildMonitorCharts() {
+        if (!monitorStack) {
+          return;
+        }
+        ensureMonitorAssignments();
+        monitorStack.innerHTML = "";
+        for (let i = 0; i < monitorConfig.count; i += 1) {
+          const card = document.createElement("section");
+          card.className = "monitor-chart";
+          card.addEventListener("contextmenu", (event) => {
+            event.preventDefault();
+            openMonitorSeriesOptions(i);
+          });
+
+          const body = document.createElement("div");
+          body.className = "monitor-chart-body";
+          const assigned = monitorConfig.assignments[i] || [];
+          if (!loadedLogLabels.length) {
+            body.textContent = "Charge un log pour choisir des valeurs.";
+          } else if (!assigned.length) {
+            body.textContent = "Clic droit pour ajouter des valeurs.";
+          } else {
+            const tags = document.createElement("div");
+            tags.className = "monitor-chart-tags";
+            assigned.forEach((label) => {
+              const tag = document.createElement("span");
+              tag.className = "monitor-chart-tag";
+              tag.textContent = label;
+              tags.appendChild(tag);
+            });
+            body.appendChild(tags);
+          }
+
+          const axis = document.createElement("div");
+          axis.className = "monitor-chart-axis";
+          axis.innerHTML = "<span>Start</span><span>Timeline</span><span>End</span>";
+
+          card.appendChild(body);
+          card.appendChild(axis);
+          monitorStack.appendChild(card);
+        }
+        updateMonitorViewportUi();
+      }
+
+      function applyMonitorSettings() {
+        const count = Number(monitorCount ? monitorCount.value : monitorConfig.count);
+        if (Number.isInteger(count) && count > 0) {
+          monitorConfig.count = Math.max(1, Math.min(12, count));
+        }
+        saveMonitorConfig();
+        syncMonitorInputs();
+        buildMonitorCharts();
+      }
+
+      function syncSettingsInputs() {
+        openPanelSettings();
+        syncMonitorInputs();
+        if (valueRefreshRate) {
+          valueRefreshRate.value = String(valueRenderIntervalMs);
+        }
+        if (chartRefreshRate) {
+          chartRefreshRate.value = String(chartRenderIntervalMs);
+        }
+      }
+
+      function saveDisplaySettings() {
+        try {
+          localStorage.setItem(displaySettingsKey, JSON.stringify({
+            valueRenderIntervalMs,
+            chartRenderIntervalMs,
+          }));
+        } catch (error) {
+        }
+      }
+
+      function loadDisplaySettings() {
+        try {
+          const raw = localStorage.getItem(displaySettingsKey);
+          if (!raw) {
+            return;
+          }
+          const data = JSON.parse(raw);
+          if (data && Number.isFinite(data.valueRenderIntervalMs)) {
+            valueRenderIntervalMs = Math.max(16, Math.min(1000, Number(data.valueRenderIntervalMs)));
+          }
+          if (data && Number.isFinite(data.chartRenderIntervalMs)) {
+            chartRenderIntervalMs = Math.max(16, Math.min(1000, Number(data.chartRenderIntervalMs)));
+          }
+        } catch (error) {
+        }
+      }
+
+      function applyDisplaySettings() {
+        const nextValueRate = Number(valueRefreshRate ? valueRefreshRate.value : valueRenderIntervalMs);
+        const nextChartRate = Number(chartRefreshRate ? chartRefreshRate.value : chartRenderIntervalMs);
+        if (Number.isFinite(nextValueRate)) {
+          valueRenderIntervalMs = Math.max(16, Math.min(1000, Math.round(nextValueRate)));
+        }
+        if (Number.isFinite(nextChartRate)) {
+          chartRenderIntervalMs = Math.max(16, Math.min(1000, Math.round(nextChartRate)));
+        }
+        saveDisplaySettings();
+        syncSettingsInputs();
       }
 
       function updatePanelValues(sample) {
@@ -1932,7 +2857,6 @@
 
       function buildUPlotSeries(labels) {
         chartColorMap.clear();
-        const smoothPaths = window.uPlot && uPlot.paths && uPlot.paths.spline ? uPlot.paths.spline() : null;
         const series = [
           {
             label: "Time",
@@ -1947,7 +2871,7 @@
             stroke: color,
             width: 2,
             scale: scaleIdForLabel(label),
-            paths: smoothPaths || undefined,
+            spanGaps: true,
           });
         });
         return series;
@@ -1984,92 +2908,112 @@
         const data = buildUPlotData(labels);
         const width = chartRoot.clientWidth || 640;
         const height = chartRoot.clientHeight || 240;
-        const chart = new uPlot({
-          width,
-          height,
-          series,
-          scales,
-          axes: [
-            {
-              grid: { show: true, stroke: "rgba(255,255,255,0.05)" },
-              values: (u, ticks) => ticks.map((value) => {
-                if (!lastSample) {
-                  return "";
-                }
-                const baseTs = chartLastTs ?? (lastSample ? lastSample.ts : null);
-                if (!baseTs) {
-                  return "";
-                }
-                const delta = Math.round((value - baseTs) / 1000);
-                return `${delta}s`;
-              }),
-              stroke: "rgba(255,255,255,0.6)",
-            },
-            {
-              show: false,
-              scale: "y",
-            },
-          ],
-          cursor: {
-            y: false,
-            points: { show: false },
-          },
-          legend: { show: false },
-          hooks: {
-            setCursor: [
-              (u) => {
-                if (!chartTooltip) {
-                  return;
-                }
-                const idx = u.cursor.idx;
-                if (idx === null || idx === undefined || idx < 0) {
-                  chartTooltip.style.opacity = 0;
-                  return;
-                }
-                const ts = u.data[0][idx];
-                if (!Number.isFinite(ts)) {
-                  chartTooltip.style.opacity = 0;
-                  return;
-                }
-                let html = `<strong>${new Date(ts).toLocaleTimeString()}</strong>`;
-                for (let i = 1; i < u.series.length; i += 1) {
-                  const rawLabel = labels[i - 1];
-                  const value = u.data[i][idx];
-                  if (!Number.isFinite(value)) {
-                    continue;
+        let chart = null;
+        try {
+          chart = new uPlot({
+            width,
+            height,
+            series,
+            scales,
+            axes: [
+              {
+                grid: { show: true, stroke: "rgba(255,255,255,0.05)" },
+                values: (u, ticks) => ticks.map((value) => {
+                  if (!lastSample) {
+                    return "";
                   }
-                  html += `<span>${displayName(rawLabel)}: ${formatValue(value, rawLabel)}</span>`;
-                }
-                chartTooltip.innerHTML = html;
-                const left = u.cursor.left + u.bbox.left;
-                const top = u.cursor.top + u.bbox.top;
-                chartTooltip.style.left = `${left}px`;
-                chartTooltip.style.top = `${top}px`;
-                chartTooltip.style.opacity = 1;
+                  const baseTs = chartLastTs ?? (lastSample ? lastSample.ts : null);
+                  if (!baseTs) {
+                    return "";
+                  }
+                  const delta = Math.round((value - baseTs) / 1000);
+                  return `${delta}s`;
+                }),
+                stroke: "rgba(255,255,255,0.6)",
+              },
+              {
+                show: false,
+                scale: "y",
               },
             ],
-            draw: [
-              (u) => {
-                const idx = u.cursor.idx;
-                if (idx === null || idx === undefined) {
-                  return;
-                }
-                const ts = u.data[0][idx];
-                if (!Number.isFinite(ts)) {
-                  return;
-                }
-                const x = u.valToPos(ts, "x", true);
-                u.ctx.save();
-                u.ctx.strokeStyle = "rgba(255,255,255,0.2)";
-                u.ctx.beginPath();
-                u.ctx.moveTo(Math.round(x) + 0.5, u.bbox.top);
-                u.ctx.lineTo(Math.round(x) + 0.5, u.bbox.top + u.bbox.height);
-                u.ctx.stroke();
-                u.ctx.restore();
-              },
-            ],
-          },
-        }, data, chartRoot);
+            cursor: {
+              y: false,
+              points: { show: false },
+            },
+            legend: { show: false },
+            hooks: {
+              setCursor: [
+                (u) => {
+                  if (!chartTooltip) {
+                    return;
+                  }
+                  const idx = u.cursor.idx;
+                  if (idx === null || idx === undefined || idx < 0) {
+                    chartTooltip.style.opacity = 0;
+                    return;
+                  }
+                  const ts = u.data[0][idx];
+                  if (!Number.isFinite(ts)) {
+                    chartTooltip.style.opacity = 0;
+                    return;
+                  }
+                  let html = `<strong>${new Date(ts).toLocaleTimeString()}</strong>`;
+                  for (let i = 1; i < u.series.length; i += 1) {
+                    const rawLabel = labels[i - 1];
+                    const value = u.data[i][idx];
+                    if (!Number.isFinite(value)) {
+                      continue;
+                    }
+                    html += `<span>${displayName(rawLabel)}: ${formatValue(value, rawLabel)}</span>`;
+                  }
+                  chartTooltip.innerHTML = html;
+                  chartTooltip.style.opacity = 1;
+                },
+              ],
+              draw: [
+                (u) => {
+                  const idx = u.cursor.idx;
+                  if (idx === null || idx === undefined) {
+                    return;
+                  }
+                  const ts = u.data[0][idx];
+                  if (!Number.isFinite(ts)) {
+                    return;
+                  }
+                  const x = u.valToPos(ts, "x", true);
+                  u.ctx.save();
+                  u.ctx.strokeStyle = "rgba(255,255,255,0.2)";
+                  u.ctx.beginPath();
+                  u.ctx.moveTo(Math.round(x) + 0.5, u.bbox.top);
+                  u.ctx.lineTo(Math.round(x) + 0.5, u.bbox.top + u.bbox.height);
+                  u.ctx.stroke();
+
+                  for (let i = 1; i < u.series.length; i += 1) {
+                    const value = u.data[i][idx];
+                    if (!Number.isFinite(value)) {
+                      continue;
+                    }
+                    const scaleKey = u.series[i].scale;
+                    const y = u.valToPos(value, scaleKey, true);
+                    const color = u.series[i].stroke || "#ffffff";
+                    u.ctx.beginPath();
+                    u.ctx.fillStyle = color;
+                    u.ctx.strokeStyle = "#0f1f2e";
+                    u.ctx.lineWidth = 2;
+                    u.ctx.arc(x, y, 4, 0, Math.PI * 2);
+                    u.ctx.fill();
+                    u.ctx.stroke();
+                  }
+
+                  u.ctx.restore();
+                },
+              ],
+            },
+          }, data, chartRoot);
+        } catch (error) {
+          console.error("Chart init failed", error);
+          return null;
+        }
 
         chartResizeObserver = new ResizeObserver((entries) => {
           entries.forEach((entry) => {
@@ -2149,7 +3093,7 @@
         renderChart();
       }
 
-      function updateHistoryChart(sample) {
+      function updateHistoryChart(sample, updatedLabels = null) {
         if (!sample) {
           return;
         }
@@ -2167,21 +3111,36 @@
         }
         const labels = getPanelLabels();
         ensureHistorySeries(labels);
+        const updatedSet = updatedLabels ? new Set(updatedLabels) : null;
         const adjustedTs = sample.ts - pauseOffsetMs;
-        historyTimestamps.push(adjustedTs);
-        chartLastTs = adjustedTs;
+        const lastHistoryTs = historyTimestamps.length ? historyTimestamps[historyTimestamps.length - 1] : null;
+        const shouldMergeWithPrevious =
+          Number.isFinite(lastHistoryTs) && adjustedTs - lastHistoryTs <= historyMergeThresholdMs;
+        if (shouldMergeWithPrevious) {
+          chartLastTs = lastHistoryTs;
+        } else {
+          historyTimestamps.push(adjustedTs);
+          chartLastTs = adjustedTs;
+        }
         labels.forEach((label) => {
           const idx = labelIndexMap.get(label);
           const series = historySeries.get(label);
           if (!series) {
             return;
           }
+          const isUpdated = !updatedSet || updatedSet.has(label);
           let value = null;
-          if (idx !== undefined) {
+          if (isUpdated && idx !== undefined) {
             const raw = Number(sample.values[idx]);
             value = Number.isFinite(raw) ? raw : null;
           }
-          series.push(value);
+          if (shouldMergeWithPrevious && series.length) {
+            if (isUpdated) {
+              series[series.length - 1] = value;
+            }
+          } else {
+            series.push(value);
+          }
         });
         trimHistory(adjustedTs);
         scheduleChartRender();
@@ -2216,9 +3175,15 @@
       loadValueScale();
       loadAliasMap();
       loadPanelConfig();
+      loadMonitorConfig();
+      loadDisplaySettings();
       loadHiddenSeries();
       buildPanelGrid();
+      buildMonitorCharts();
       applyPanelSplit(loadPanelSplit());
+      syncSettingsInputs();
+      renderLoadedLogValues();
+      setRecordingUiState();
       syncHistoryDatasets();
       connect();
       fetchStatus();
@@ -2286,9 +3251,6 @@
           }
         });
       }
-      if (panelSettings) {
-        panelSettings.addEventListener("click", openPanelSettings);
-      }
       if (panelSplitter) {
         const onMove = (event) => {
           if (!panelGrid || !panelBottom) {
@@ -2320,14 +3282,24 @@
       if (panelApply) {
         panelApply.addEventListener("click", applyPanelSettings);
       }
-      if (panelClose) {
-        panelClose.addEventListener("click", closePanelSettings);
+      if (monitorApply) {
+        monitorApply.addEventListener("click", applyMonitorSettings);
       }
-      if (panelOverlay) {
-        panelOverlay.addEventListener("click", (event) => {
-          if (event.target === panelOverlay) {
-            closePanelSettings();
-          }
+      if (displayApply) {
+        displayApply.addEventListener("click", applyDisplaySettings);
+      }
+      if (monitorZoomSlider) {
+        monitorZoomSlider.addEventListener("input", () => {
+          monitorConfig.zoom = Math.max(1, Math.min(12, Number(monitorZoomSlider.value) || 1));
+          saveMonitorConfig();
+          updateMonitorViewportUi();
+        });
+      }
+      if (monitorNavSlider) {
+        monitorNavSlider.addEventListener("input", () => {
+          monitorConfig.offset = Math.max(0, Number(monitorNavSlider.value || 0) / 1000);
+          saveMonitorConfig();
+          updateMonitorViewportUi();
         });
       }
       if (cellApply) {
@@ -2343,10 +3315,38 @@
           }
         });
       }
+      if (monitorSeriesApply) {
+        monitorSeriesApply.addEventListener("click", applyMonitorSeriesOptions);
+      }
+      if (monitorSeriesClose) {
+        monitorSeriesClose.addEventListener("click", closeMonitorSeriesOptions);
+      }
+      if (monitorSeriesOverlay) {
+        monitorSeriesOverlay.addEventListener("click", (event) => {
+          if (event.target === monitorSeriesOverlay) {
+            closeMonitorSeriesOptions();
+          }
+        });
+      }
       if (chartToggle) {
         chartToggle.addEventListener("click", () => {
           chartPaused = !chartPaused;
           chartToggle.textContent = chartPaused ? "Play" : "Pause";
+        });
+      }
+      if (recordToggle) {
+        recordToggle.addEventListener("click", toggleRecording);
+      }
+      if (loadLogButton && loadLogInput) {
+        loadLogButton.addEventListener("click", () => {
+          loadLogInput.click();
+        });
+      }
+      if (loadLogInput) {
+        loadLogInput.addEventListener("change", () => {
+          const [file] = Array.from(loadLogInput.files || []);
+          handleLoadedLogFile(file);
+          loadLogInput.value = "";
         });
       }
 
