@@ -1,4 +1,4 @@
-adx_path: "C:/Users/Ericendre/Downloads/SIMK43 with OpenTG AFR support.adx"
+adx_path: "./SIMK43 with OpenTG AFR support.adx"
 
 # Empty list means: expose every ADXVALUE the decoder can resolve.
 excluded_pids:
