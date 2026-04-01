@@ -600,10 +600,12 @@
         flex: 1;
         min-height: 0;
         display: grid;
+        grid-template-rows: minmax(0, 1fr) auto;
         gap: 10px;
       }
 
       .monitor-stack {
+        height: 100%;
         min-height: 0;
         overflow: auto;
         display: grid;
@@ -612,17 +614,17 @@
       }
 
       .monitor-chart {
-        min-height: 140px;
+        min-height: 0;
+        position: relative;
         border-radius: 14px;
         border: 1px solid rgba(255, 255, 255, 0.08);
         background:
           linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px) 0 0 / 100% 28px,
           linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px) 0 0 / 48px 100%,
           linear-gradient(180deg, rgba(22, 38, 54, 0.96), rgba(9, 18, 28, 0.96));
-        padding: 12px 14px;
-        display: grid;
-        align-content: space-between;
-        gap: 10px;
+        padding: 8px 10px;
+        display: flex;
+        flex-direction: column;
       }
 
       .monitor-chart-body {
@@ -633,6 +635,55 @@
         color: rgba(255, 255, 255, 0.42);
         font-size: 13px;
         gap: 8px;
+      }
+
+      .monitor-chart-body.has-chart {
+        display: block;
+        min-height: 0;
+        flex: 1;
+      }
+
+      .monitor-chart-legend {
+        position: absolute;
+        top: 8px;
+        right: 10px;
+        display: grid;
+        gap: 4px;
+        padding: 6px 8px;
+        border-radius: 10px;
+        background: rgba(8, 16, 24, 0.72);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(2px);
+        z-index: 5;
+        max-width: min(42%, 260px);
+        pointer-events: none;
+      }
+
+      .monitor-legend-row {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      .monitor-legend-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+
+      .monitor-legend-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .monitor-legend-value {
+        color: var(--text);
+        font-weight: 700;
       }
 
       .monitor-chart-tags {
@@ -648,14 +699,6 @@
         border: 1px solid rgba(255, 179, 71, 0.3);
         color: var(--text);
         font-size: 12px;
-      }
-
-      .monitor-chart-axis {
-        display: flex;
-        justify-content: space-between;
-        color: var(--muted);
-        font-size: 11px;
-        letter-spacing: 0.04em;
       }
 
       .monitor-nav {
@@ -682,6 +725,21 @@
         box-shadow: 0 0 12px rgba(255, 179, 71, 0.25);
       }
 
+      .monitor-nav-time {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: rgba(255, 255, 255, 0.82);
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        pointer-events: none;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+        z-index: 2;
+        white-space: nowrap;
+      }
+
       .monitor-nav-slider {
         position: absolute;
         inset: 0;
@@ -689,6 +747,7 @@
         margin: 0;
         opacity: 0;
         cursor: pointer;
+        z-index: 3;
       }
 
       #chart-slider {
@@ -819,7 +878,6 @@
           <strong>Monitor</strong>
           <div class="panel-actions">
             <button class="button" id="load-log-button">Load Log</button>
-            <input class="hidden-input" id="load-log-input" type="file" accept=".json,application/json" />
           </div>
         </div>
         <div class="monitor-toolbar">
@@ -831,8 +889,9 @@
           <div class="monitor-nav">
             <div class="monitor-nav-track">
               <div class="monitor-nav-window" id="monitor-nav-window"></div>
+              <div class="monitor-nav-time" id="monitor-nav-time"></div>
+              <input class="monitor-nav-slider" id="monitor-nav-slider" type="range" min="0" max="0" step="1" value="0" />
             </div>
-            <input class="monitor-nav-slider" id="monitor-nav-slider" type="range" min="0" max="0" step="1" value="0" />
           </div>
         </div>
       </div>
@@ -890,10 +949,6 @@
               <input class="value-input" id="monitor-count" type="number" min="1" max="12" />
             </div>
             <div class="settings-help">Les graphes sont vides pour le moment, comme placeholders configurables.</div>
-            <div class="overlay-field">
-              <label>Valeurs du log charge</label>
-              <div class="overlay-list" id="loaded-log-values"></div>
-            </div>
             <div class="controls">
               <button class="button" id="monitor-apply">Appliquer monitor</button>
             </div>
@@ -915,6 +970,7 @@
         </div>
       </div>
     </main>
+    <input class="hidden-input" id="load-log-input" type="file" accept=".json,application/json" />
     <footer class="footer-bar">
       <div class="footer-actions">
       </div>
@@ -1051,6 +1107,7 @@
       const monitorZoomSlider = document.getElementById("monitor-zoom-slider");
       const monitorNavSlider = document.getElementById("monitor-nav-slider");
       const monitorNavWindow = document.getElementById("monitor-nav-window");
+      const monitorNavTime = document.getElementById("monitor-nav-time");
       const monitorSeriesOverlay = document.getElementById("monitor-series-overlay");
       const monitorSeriesTitle = document.getElementById("monitor-series-title");
       const monitorSeriesList = document.getElementById("monitor-series-list");
@@ -1133,10 +1190,14 @@
       const displaySettingsKey = "gkflasher.displaySettings";
       let isRecording = false;
       let recordedEvents = [];
-      let recordingStartTs = null;
       let loadedLogData = null;
       let loadedLogLabels = [];
       let activeMonitorChartIndex = null;
+      let monitorChartInstances = [];
+      let monitorChartContexts = [];
+      let monitorHoverTs = null;
+      let monitorCursorSyncing = false;
+      let monitorScaleSyncing = false;
 
       const engineDisplacementL = 1.975;
       const engineCylinders = 4;
@@ -2225,13 +2286,6 @@
         if (!isRecording || !sample || !updatedLabels) {
           return;
         }
-        const sampleTs = Number(sample.ts);
-        if (!Number.isFinite(sampleTs)) {
-          return;
-        }
-        if (!Number.isFinite(recordingStartTs)) {
-          recordingStartTs = sampleTs;
-        }
         const labels = Array.from(new Set(updatedLabels));
         const values = {};
         labels.forEach((label) => {
@@ -2251,10 +2305,8 @@
         if (!Object.keys(values).length) {
           return;
         }
-        const localTsMs = Math.max(0, sampleTs - recordingStartTs);
         recordedEvents.push({
-          ts: sampleTs,
-          local_ts_ms: localTsMs,
+          ts: sample.ts,
           source,
           values,
         });
@@ -2263,8 +2315,6 @@
       function downloadRecordedLog() {
         const payload = {
           exported_at: new Date().toISOString(),
-          recording_started_at: Number.isFinite(recordingStartTs) ? new Date(recordingStartTs).toISOString() : null,
-          recording_started_ts: Number.isFinite(recordingStartTs) ? recordingStartTs : null,
           labels: currentLabels.filter((label) => !hiddenLabels.has(label)),
           events: recordedEvents,
         };
@@ -2288,11 +2338,9 @@
           setRecordingUiState();
           downloadRecordedLog();
           recordedEvents = [];
-          recordingStartTs = null;
           return;
         }
         recordedEvents = [];
-        recordingStartTs = null;
         isRecording = true;
         setRecordingUiState();
       }
@@ -2694,6 +2742,39 @@
         return 1 / Math.max(1, monitorConfig.zoom);
       }
 
+      function formatMonitorDuration(ms) {
+        if (!Number.isFinite(ms) || ms < 0) {
+          return "0:00";
+        }
+        const totalSec = Math.round(ms / 1000);
+        const m = Math.floor(totalSec / 60);
+        const s = totalSec % 60;
+        return `${m}:${String(s).padStart(2, "0")}`;
+      }
+
+      function updateMonitorNavTimeUi(windowRatio = getMonitorWindowRatio()) {
+        if (!monitorNavTime) {
+          return;
+        }
+        if (!loadedLogData || !Array.isArray(loadedLogData.events) || loadedLogData.events.length < 2) {
+          monitorNavTime.textContent = "";
+          return;
+        }
+        const events = loadedLogData.events;
+        const minTs = Number(events[0].ts);
+        const maxTs = Number(events[events.length - 1].ts);
+        if (!Number.isFinite(minTs) || !Number.isFinite(maxTs) || maxTs <= minTs) {
+          monitorNavTime.textContent = "";
+          return;
+        }
+        const totalDuration = maxTs - minTs;
+        const windowDuration = totalDuration * windowRatio;
+        const maxStartOffset = Math.max(0, totalDuration - windowDuration);
+        const startOffset = monitorConfig.offset * maxStartOffset;
+        const endOffset = startOffset + windowDuration;
+        monitorNavTime.textContent = `${formatMonitorDuration(startOffset)} / ${formatMonitorDuration(totalDuration)} / ${formatMonitorDuration(endOffset)}`;
+      }
+
       function renderLoadedLogValues() {
         if (!loadedLogValues) {
           return;
@@ -2733,50 +2814,410 @@
           monitorNavWindow.style.width = `${windowRatio * 100}%`;
           monitorNavWindow.style.left = `${(maxOffset > 0 ? monitorConfig.offset / maxOffset : 0) * (100 - windowRatio * 100)}%`;
         }
+        updateMonitorNavTimeUi(windowRatio);
+      }
+
+      function extractMonitorData(assignedLabels) {
+        if (!loadedLogData || !Array.isArray(loadedLogData.events) || !loadedLogData.events.length) {
+          return null;
+        }
+        const tsValMap = new Map();
+        loadedLogData.events.forEach((ev) => {
+          const ts = Number(ev.ts);
+          if (!Number.isFinite(ts)) {
+            return;
+          }
+          if (!tsValMap.has(ts)) {
+            tsValMap.set(ts, {});
+          }
+          if (ev.values && typeof ev.values === "object") {
+            Object.assign(tsValMap.get(ts), ev.values);
+          }
+        });
+        const sortedTs = Array.from(tsValMap.keys()).sort((a, b) => a - b);
+        if (!sortedTs.length) {
+          return null;
+        }
+        const yData = assignedLabels.map((label) => {
+          let last = null;
+          return sortedTs.map((ts) => {
+            const row = tsValMap.get(ts);
+            if (row && row[label] !== undefined && row[label] !== "--") {
+              const v = Number(row[label]);
+              if (Number.isFinite(v)) {
+                last = v;
+              }
+            }
+            return last;
+          });
+        });
+        return [sortedTs, ...yData];
+      }
+
+      function findNearestTsIndex(timestamps, targetTs) {
+        if (!Array.isArray(timestamps) || !timestamps.length || !Number.isFinite(targetTs)) {
+          return null;
+        }
+        let lo = 0;
+        let hi = timestamps.length - 1;
+        while (lo <= hi) {
+          const mid = (lo + hi) >> 1;
+          const value = timestamps[mid];
+          if (value === targetTs) {
+            return mid;
+          }
+          if (value < targetTs) {
+            lo = mid + 1;
+          } else {
+            hi = mid - 1;
+          }
+        }
+        if (lo <= 0) {
+          return 0;
+        }
+        if (lo >= timestamps.length) {
+          return timestamps.length - 1;
+        }
+        const before = timestamps[lo - 1];
+        const after = timestamps[lo];
+        return Math.abs(targetTs - before) <= Math.abs(after - targetTs) ? lo - 1 : lo;
+      }
+
+      function updateMonitorLegendContext(context, targetTs = null) {
+        if (!context || !context.data || !context.data.length || !context.valueEls || !context.valueEls.length) {
+          return;
+        }
+        const timestamps = context.data[0];
+        if (!timestamps || !timestamps.length) {
+          return;
+        }
+        let idx = timestamps.length - 1;
+        if (Number.isFinite(targetTs)) {
+          const nearest = findNearestTsIndex(timestamps, targetTs);
+          if (nearest !== null) {
+            idx = nearest;
+          }
+        }
+        context.labels.forEach((label, seriesIndex) => {
+          const series = context.data[seriesIndex + 1] || [];
+          const raw = series[idx];
+          const num = Number(raw);
+          context.valueEls[seriesIndex].textContent = Number.isFinite(num) ? formatValue(num, label) : "--";
+        });
+      }
+
+      function updateAllMonitorLegends(targetTs = null) {
+        monitorChartContexts.forEach((context) => updateMonitorLegendContext(context, targetTs));
+      }
+
+      function getMonitorLogTimeRange() {
+        if (!loadedLogData || !Array.isArray(loadedLogData.events) || !loadedLogData.events.length) {
+          return null;
+        }
+        const events = loadedLogData.events;
+        const minTs = Number(events[0].ts);
+        const maxTs = Number(events[events.length - 1].ts);
+        if (!Number.isFinite(minTs) || !Number.isFinite(maxTs) || maxTs <= minTs) {
+          return null;
+        }
+        return { minTs, maxTs, total: maxTs - minTs };
+      }
+
+      function syncMonitorScaleFromChart(sourceChart) {
+        if (monitorScaleSyncing || !sourceChart || !sourceChart.scales || !sourceChart.scales.x) {
+          return;
+        }
+        const range = getMonitorLogTimeRange();
+        if (!range) {
+          return;
+        }
+        const xScale = sourceChart.scales.x;
+        let viewMin = Number(xScale.min);
+        let viewMax = Number(xScale.max);
+        if (!Number.isFinite(viewMin) || !Number.isFinite(viewMax) || viewMax <= viewMin) {
+          return;
+        }
+        viewMin = Math.max(range.minTs, Math.min(range.maxTs, viewMin));
+        viewMax = Math.max(range.minTs, Math.min(range.maxTs, viewMax));
+        if (viewMax <= viewMin) {
+          return;
+        }
+
+        monitorScaleSyncing = true;
+        try {
+          monitorChartContexts.forEach((context) => {
+            const chart = context.chart;
+            if (!chart || chart === sourceChart) {
+              return;
+            }
+            try {
+              chart.setScale("x", { min: viewMin, max: viewMax });
+            } catch (error) {
+            }
+          });
+        } finally {
+          monitorScaleSyncing = false;
+        }
+
+        const windowDuration = viewMax - viewMin;
+        const windowRatio = Math.max(0.0001, Math.min(1, windowDuration / range.total));
+        const maxStartOffset = Math.max(0, range.total - windowDuration);
+        const startOffset = Math.max(0, viewMin - range.minTs);
+        const offsetRatio = maxStartOffset > 0 ? Math.max(0, Math.min(1, startOffset / maxStartOffset)) : 0;
+
+        monitorConfig.zoom = 1 / windowRatio;
+        monitorConfig.offset = offsetRatio;
+        saveMonitorConfig();
+        updateMonitorViewportUi();
+        updateMonitorNavTimeUi(windowRatio);
+      }
+
+      function syncMonitorCursorToLeft(sourceChart, sourceLeft) {
+        if (monitorCursorSyncing) {
+          return;
+        }
+        monitorCursorSyncing = true;
+        try {
+          const sourceBox = sourceChart && sourceChart.bbox ? sourceChart.bbox : null;
+          const hasLeft = Number.isFinite(sourceLeft) && sourceBox && Number.isFinite(sourceBox.left) && Number.isFinite(sourceBox.width) && sourceBox.width > 0;
+          const ratio = hasLeft ? Math.max(0, Math.min(1, (sourceLeft - sourceBox.left) / sourceBox.width)) : null;
+          monitorChartContexts.forEach((context) => {
+            const chart = context.chart;
+            if (!chart || chart === sourceChart) {
+              return;
+            }
+            try {
+              if (!Number.isFinite(ratio)) {
+                chart.setCursor({ left: -1000, top: -1000 }, false);
+                return;
+              }
+              const box = chart.bbox;
+              if (!box || !Number.isFinite(box.left) || !Number.isFinite(box.width) || box.width <= 0) {
+                return;
+              }
+              const left = box.left + ratio * box.width;
+              if (!Number.isFinite(left)) {
+                return;
+              }
+              chart.setCursor({ left, top: chart.cursor.top ?? 0 }, false);
+            } catch (error) {
+            }
+          });
+        } finally {
+          monitorCursorSyncing = false;
+        }
+      }
+
+      function renderMonitorChartUplot(containerEl, legendEl, assignedLabels) {
+        const data = extractMonitorData(assignedLabels);
+        if (!data || !data[0].length) {
+          containerEl.textContent = "Aucune donnee pour ces series.";
+          return null;
+        }
+        const scales = { x: { time: false } };
+        const monitorScaleIds = [];
+        const series = [{}];
+        assignedLabels.forEach((label, i) => {
+          const scaleId = `m${i}`;
+          monitorScaleIds.push(scaleId);
+          const fixedScale = valueScaleMap.get(label);
+          const hasMin = fixedScale && Number.isFinite(fixedScale.min);
+          const hasMax = fixedScale && Number.isFinite(fixedScale.max);
+          scales[scaleId] = {
+            auto: true,
+            range: (u, dataMin, dataMax) => {
+              let min = Number.isFinite(dataMin) ? dataMin : null;
+              let max = Number.isFinite(dataMax) ? dataMax : null;
+              if (hasMin) {
+                min = fixedScale.min;
+              }
+              if (hasMax) {
+                max = fixedScale.max;
+              }
+              if (Number.isFinite(min) && Number.isFinite(max) && min >= max) {
+                return [dataMin, dataMax];
+              }
+              return [min, max];
+            },
+          };
+          series.push({
+            label: displayName(label),
+            stroke: chartColors[i % chartColors.length],
+            width: 2,
+            scale: scaleId,
+            spanGaps: true,
+            points: { show: false },
+          });
+        });
+        const valueEls = [];
+        if (legendEl) {
+          legendEl.innerHTML = "";
+          assignedLabels.forEach((label, i) => {
+            const row = document.createElement("div");
+            row.className = "monitor-legend-row";
+            const dot = document.createElement("span");
+            dot.className = "monitor-legend-dot";
+            dot.style.background = chartColors[i % chartColors.length];
+            const name = document.createElement("span");
+            name.className = "monitor-legend-label";
+            name.textContent = displayName(label);
+            const value = document.createElement("span");
+            value.className = "monitor-legend-value";
+            value.textContent = "--";
+            row.appendChild(dot);
+            row.appendChild(name);
+            row.appendChild(value);
+            legendEl.appendChild(row);
+            valueEls.push(value);
+          });
+        }
+        const width = Math.max(100, containerEl.clientWidth || 400);
+        const height = Math.max(120, containerEl.clientHeight || 220);
+        let chart = null;
+        try {
+          chart = new uPlot(
+            {
+              width,
+              height,
+              series,
+              scales,
+              axes: [
+                {
+                  show: false,
+                },
+                ...monitorScaleIds.map((scaleId) => ({
+                  show: false,
+                  scale: scaleId,
+                })),
+              ],
+              legend: { show: false },
+              cursor: { y: false, points: { show: false } },
+              hooks: {
+                setCursor: [
+                  (u) => {
+                    if (monitorCursorSyncing) {
+                      return;
+                    }
+                    const sourceLeft = u.cursor.left;
+                    if (!Number.isFinite(sourceLeft)) {
+                      monitorHoverTs = null;
+                      updateAllMonitorLegends();
+                      syncMonitorCursorToLeft(u, null);
+                      return;
+                    }
+                    const ts = u.posToVal(sourceLeft, "x");
+                    if (!Number.isFinite(ts)) {
+                      return;
+                    }
+                    monitorHoverTs = ts;
+                    updateAllMonitorLegends(ts);
+                    syncMonitorCursorToLeft(u, sourceLeft);
+                  },
+                ],
+                setScale: [
+                  (u, key) => {
+                    if (key !== "x" || monitorScaleSyncing) {
+                      return;
+                    }
+                    syncMonitorScaleFromChart(u);
+                  },
+                ],
+              },
+            },
+            data,
+            containerEl
+          );
+        } catch (err) {
+          containerEl.textContent = "Erreur de rendu.";
+          return null;
+        }
+        return {
+          chart,
+          labels: assignedLabels,
+          data,
+          valueEls,
+        };
+      }
+
+      function updateMonitorChartViewport() {
+        if (!loadedLogData || !Array.isArray(loadedLogData.events) || !loadedLogData.events.length) {
+          return;
+        }
+        const events = loadedLogData.events;
+        const minTs = Number(events[0].ts);
+        const maxTs = Number(events[events.length - 1].ts);
+        if (!Number.isFinite(minTs) || !Number.isFinite(maxTs) || maxTs <= minTs) {
+          return;
+        }
+        const totalDuration = maxTs - minTs;
+        const windowRatio = getMonitorWindowRatio();
+        const windowDuration = totalDuration * windowRatio;
+        const maxStartOffset = Math.max(0, totalDuration - windowDuration);
+        const startOffset = monitorConfig.offset * maxStartOffset;
+        const viewMin = minTs + startOffset;
+        const viewMax = viewMin + windowDuration;
+        monitorChartInstances.forEach((ch) => {
+          try {
+            ch.setScale("x", { min: viewMin, max: viewMax });
+          } catch (e) {}
+        });
       }
 
       function buildMonitorCharts() {
         if (!monitorStack) {
           return;
         }
+        monitorChartInstances.forEach((ch) => {
+          try {
+            ch.destroy();
+          } catch (e) {}
+        });
+        monitorChartInstances = [];
+        monitorChartContexts = [];
+        monitorHoverTs = null;
         ensureMonitorAssignments();
         monitorStack.innerHTML = "";
+        monitorStack.style.gridTemplateRows = `repeat(${Math.max(1, monitorConfig.count)}, minmax(0, 1fr))`;
         for (let i = 0; i < monitorConfig.count; i += 1) {
+          const assigned = monitorConfig.assignments[i] || [];
+          const hasChart = loadedLogLabels.length > 0 && assigned.length > 0 && !!loadedLogData;
           const card = document.createElement("section");
           card.className = "monitor-chart";
           card.addEventListener("contextmenu", (event) => {
             event.preventDefault();
             openMonitorSeriesOptions(i);
           });
-
           const body = document.createElement("div");
           body.className = "monitor-chart-body";
-          const assigned = monitorConfig.assignments[i] || [];
           if (!loadedLogLabels.length) {
             body.textContent = "Charge un log pour choisir des valeurs.";
           } else if (!assigned.length) {
             body.textContent = "Clic droit pour ajouter des valeurs.";
           } else {
-            const tags = document.createElement("div");
-            tags.className = "monitor-chart-tags";
-            assigned.forEach((label) => {
-              const tag = document.createElement("span");
-              tag.className = "monitor-chart-tag";
-              tag.textContent = label;
-              tags.appendChild(tag);
-            });
-            body.appendChild(tags);
+            body.classList.add("has-chart");
           }
-
-          const axis = document.createElement("div");
-          axis.className = "monitor-chart-axis";
-          axis.innerHTML = "<span>Start</span><span>Timeline</span><span>End</span>";
-
+          const legend = document.createElement("div");
+          legend.className = "monitor-chart-legend";
           card.appendChild(body);
-          card.appendChild(axis);
+          card.appendChild(legend);
           monitorStack.appendChild(card);
+          if (hasChart) {
+            const capturedBody = body;
+            const capturedLegend = legend;
+            const capturedAssigned = assigned.slice();
+            requestAnimationFrame(() => {
+              const context = renderMonitorChartUplot(capturedBody, capturedLegend, capturedAssigned);
+              if (context) {
+                monitorChartInstances.push(context.chart);
+                monitorChartContexts.push(context);
+                updateMonitorChartViewport();
+                updateMonitorLegendContext(context, monitorHoverTs);
+              }
+            });
+          }
         }
         updateMonitorViewportUi();
+        updateAllMonitorLegends(monitorHoverTs);
       }
 
       function applyMonitorSettings() {
@@ -3563,6 +4004,7 @@
           monitorConfig.zoom = Math.max(1, Math.min(12, Number(monitorZoomSlider.value) || 1));
           saveMonitorConfig();
           updateMonitorViewportUi();
+          updateMonitorChartViewport();
         });
       }
       if (monitorNavSlider) {
@@ -3570,6 +4012,7 @@
           monitorConfig.offset = Math.max(0, Number(monitorNavSlider.value || 0) / 1000);
           saveMonitorConfig();
           updateMonitorViewportUi();
+          updateMonitorChartViewport();
         });
       }
       if (cellApply) {
