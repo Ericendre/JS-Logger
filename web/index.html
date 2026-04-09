@@ -1037,6 +1037,7 @@
           <div class="panel-actions">
             <span class="dyno-range-info" id="dyno-range-info">Selectionne une plage dans Monitor (clic droit → Dyno)</span>
             <button class="button" id="dyno-export">Exporter CSV</button>
+            <button class="button" id="dyno-export-image">Exporter image</button>
           </div>
         </div>
         <div class="dyno-layout">
@@ -1328,6 +1329,7 @@
       const dynoCalc = document.getElementById("dyno-calc");
       const dynoClear = document.getElementById("dyno-clear");
       const dynoExport = document.getElementById("dyno-export");
+      const dynoExportImage = document.getElementById("dyno-export-image");
       const dynoStatus = document.getElementById("dyno-status");
       const dynoChartRoot = document.getElementById("dyno-chart");
       const dynoRangeInfo = document.getElementById("dyno-range-info");
@@ -4557,6 +4559,15 @@
         URL.revokeObjectURL(url);
       }
 
+      function triggerImageDownload(fileName, dataUrl) {
+        const link = document.createElement("a");
+        link.href = dataUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+
       function formatDateForFile(date = new Date()) {
         const timePart = date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).replace(/:/g, "-");
         const datePart = date.toLocaleDateString("fr-FR").replace(/\//g, "-");
@@ -4598,6 +4609,41 @@
         const fileName = `RoadDyno ${formatDateForFile()} ${Math.round(meta.startRpm || 2000)}-${Math.round(meta.endRpm || 0)}.csv`;
         triggerCsvDownload(fileName, lines.join("\n"));
         setRoadDynoStatus("Export dyno CSV termine.");
+      }
+
+      function exportRoadDynoImage() {
+        if (!roadDynoChart || !roadDynoLastResult || !Array.isArray(roadDynoLastResult.rpm) || !roadDynoLastResult.rpm.length) {
+          setRoadDynoStatus("Aucune courbe dyno a exporter en image.");
+          return;
+        }
+
+        const sourceCanvas = roadDynoChart.root ? roadDynoChart.root.querySelector("canvas") : null;
+        if (!sourceCanvas || !sourceCanvas.width || !sourceCanvas.height) {
+          setRoadDynoStatus("Canvas dyno introuvable pour l'export image.");
+          return;
+        }
+
+        const scale = 2;
+        const exportCanvas = document.createElement("canvas");
+        exportCanvas.width = sourceCanvas.width * scale;
+        exportCanvas.height = sourceCanvas.height * scale;
+        const ctx = exportCanvas.getContext("2d");
+        if (!ctx) {
+          setRoadDynoStatus("Impossible de preparer l'export image.");
+          return;
+        }
+
+        ctx.fillStyle = "#0b1220";
+        ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+        ctx.save();
+        ctx.scale(scale, scale);
+        ctx.drawImage(sourceCanvas, 0, 0);
+        ctx.restore();
+
+        const meta = roadDynoLastResult.meta || {};
+        const fileName = `RoadDyno ${formatDateForFile()} ${Math.round(meta.startRpm || 2000)}-${Math.round(meta.endRpm || 0)}.png`;
+        triggerImageDownload(fileName, exportCanvas.toDataURL("image/png"));
+        setRoadDynoStatus("Export dyno image termine.");
       }
 
       function computeRoadDynoFromLoadedLog() {
@@ -5493,6 +5539,9 @@
       }
       if (dynoExport) {
         dynoExport.addEventListener("click", exportRoadDynoResult);
+      }
+      if (dynoExportImage) {
+        dynoExportImage.addEventListener("click", exportRoadDynoImage);
       }
       if (dynoFilterWindow) {
         dynoFilterWindow.addEventListener("input", () => {
