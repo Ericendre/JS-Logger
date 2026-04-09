@@ -111,6 +111,7 @@
       }
 
       .dyno-chart {
+        position: relative;
         min-height: 220px;
         border-radius: 12px;
         border: 1px solid rgba(255, 255, 255, 0.1);
@@ -778,7 +779,7 @@
 
       .monitor-chart-legend {
         position: absolute;
-        top: 8px;
+        bottom: 8px;
         right: 10px;
         display: grid;
         gap: 4px;
@@ -1074,6 +1075,20 @@
                 <input class="value-input" id="dyno-rho" type="number" min="0.9" max="1.4" step="0.001" />
               </div>
               <div class="overlay-field">
+                <label for="dyno-speed-source-mode">Source vitesse</label>
+                <select class="value-input" id="dyno-speed-source-mode">
+                  <option value="auto">Auto</option>
+                  <option value="channel">Canal du log</option>
+                  <option value="rpm">Estimation par RPM</option>
+                </select>
+              </div>
+              <div class="overlay-field">
+                <label for="dyno-speed-label">Canal vitesse</label>
+                <select class="value-input" id="dyno-speed-label">
+                  <option value="">Auto-detection</option>
+                </select>
+              </div>
+              <div class="overlay-field">
                 <label for="dyno-rpm2speed">Vitesse @1000 rpm (km/h, rapport du pull)</label>
                 <input class="value-input" id="dyno-rpm2speed" type="number" min="5" max="120" step="0.1" />
               </div>
@@ -1305,6 +1320,8 @@
       const dynoLoss = document.getElementById("dyno-loss");
       const dynoSlope = document.getElementById("dyno-slope");
       const dynoRho = document.getElementById("dyno-rho");
+      const dynoSpeedSourceMode = document.getElementById("dyno-speed-source-mode");
+      const dynoSpeedLabel = document.getElementById("dyno-speed-label");
       const dynoRpm2Speed = document.getElementById("dyno-rpm2speed");
       const dynoFilterWindow = document.getElementById("dyno-filter-window");
       const dynoFilterValue = document.getElementById("dyno-filter-value");
@@ -1438,6 +1455,8 @@
         drivetrainLossPct: 15,
         slopePct: 0,
         airDensityKgM3: 1.184,
+        speedSourceMode: "auto",
+        speedLabel: "",
         rpmToSpeedKmhPer1000: 30,
         filterWindow: 5,
       };
@@ -2561,12 +2580,39 @@
       }
 
       async function downloadRecordedLog() {
+        const labels = currentLabels.filter((label) => !hiddenLabels.has(label));
+        const labelIndex = new Map(labels.map((label, index) => [label, index]));
+        const compactEvents = recordedEvents
+          .map((event) => {
+            if (!event || !event.values || typeof event.values !== "object") {
+              return null;
+            }
+            const ts = Number(event.ts);
+            if (!Number.isFinite(ts)) {
+              return null;
+            }
+            const indexedValues = [];
+            Object.entries(event.values).forEach(([label, value]) => {
+              const idx = labelIndex.get(label);
+              if (idx === undefined || value === undefined || value === "--") {
+                return;
+              }
+              indexedValues.push([idx, value]);
+            });
+            if (!indexedValues.length) {
+              return null;
+            }
+            return [ts, event.source || "ecu", indexedValues];
+          })
+          .filter((event) => !!event);
+
         const payload = {
           exported_at: new Date().toISOString(),
-          labels: currentLabels.filter((label) => !hiddenLabels.has(label)),
-          events: recordedEvents,
+          format: "indexed_sparse_v1",
+          labels,
+          events: compactEvents,
         };
-        const json = JSON.stringify(payload, null, 2);
+        const json = JSON.stringify(payload);
         const now = new Date();
         const timePart = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", hour12: false }).replace(/:/g, "-");
         const datePart = now.toLocaleDateString("fr-FR").replace(/\//g, "-");
@@ -2599,6 +2645,101 @@
         if (loadLogStatus) {
           loadLogStatus.textContent = text;
         }
+      }
+
+      function normalizeLoadedLog(data) {
+        if (!data || !Array.isArray(data.events)) {
+          throw new Error("Invalid log format");
+        }
+
+        const labelsFromHeader = Array.isArray(data.labels)
+          ? data.labels.filter((label) => typeof label === "string" && label.trim().length > 0)
+          : [];
+
+        const isIndexedFormat = data.format === "indexed_sparse_v1"
+          || (data.events.length > 0 && Array.isArray(data.events[0]));
+
+        const normalizedEvents = [];
+
+        if (isIndexedFormat) {
+          if (!labelsFromHeader.length) {
+            throw new Error("Missing labels for indexed log format");
+          }
+
+          data.events.forEach((rawEvent) => {
+            if (!Array.isArray(rawEvent) || rawEvent.length < 3) {
+              return;
+            }
+            const ts = Number(rawEvent[0]);
+            if (!Number.isFinite(ts)) {
+              return;
+            }
+            const source = typeof rawEvent[1] === "string" ? rawEvent[1] : "ecu";
+            const pairs = rawEvent[2];
+            if (!Array.isArray(pairs)) {
+              return;
+            }
+
+            const values = {};
+            pairs.forEach((pair) => {
+              if (!Array.isArray(pair) || pair.length < 2) {
+                return;
+              }
+              const idx = Number(pair[0]);
+              if (!Number.isInteger(idx) || idx < 0 || idx >= labelsFromHeader.length) {
+                return;
+              }
+              const label = labelsFromHeader[idx];
+              const value = pair[1];
+              if (!label || value === undefined || value === "--") {
+                return;
+              }
+              values[label] = value;
+            });
+
+            if (!Object.keys(values).length) {
+              return;
+            }
+
+            normalizedEvents.push({ ts, source, values });
+          });
+        } else {
+          data.events.forEach((event) => {
+            const ts = Number(event && event.ts);
+            if (!Number.isFinite(ts)) {
+              return;
+            }
+            const source = (event && typeof event.source === "string") ? event.source : "ecu";
+            const values = {};
+            if (event && event.values && typeof event.values === "object") {
+              Object.entries(event.values).forEach(([label, value]) => {
+                if (typeof label !== "string" || !label || value === undefined || value === "--") {
+                  return;
+                }
+                values[label] = value;
+              });
+            }
+            if (!Object.keys(values).length) {
+              return;
+            }
+            normalizedEvents.push({ ts, source, values });
+          });
+        }
+
+        normalizedEvents.sort((a, b) => a.ts - b.ts);
+
+        const labelSet = new Set(labelsFromHeader);
+        normalizedEvents.forEach((event) => {
+          Object.keys(event.values).forEach((label) => labelSet.add(label));
+        });
+
+        return {
+          data: {
+            ...data,
+            events: normalizedEvents,
+          },
+          labels: Array.from(labelSet).sort((a, b) => a.localeCompare(b)),
+        };
       }
 
       function openMonitorSeriesOptions(index) {
@@ -2673,18 +2814,14 @@
           try {
             const raw = typeof reader.result === "string" ? reader.result : "";
             const data = JSON.parse(raw);
-            if (!data || !Array.isArray(data.events)) {
-              throw new Error("Invalid log format");
-            }
-            loadedLogData = data;
-            loadedLogLabels = Array.from(new Set(
-              data.events.flatMap((event) =>
-                event && event.values && typeof event.values === "object" ? Object.keys(event.values) : []
-              )
-            )).sort((a, b) => a.localeCompare(b));
-            const count = data.events.length;
+            const normalized = normalizeLoadedLog(data);
+            loadedLogData = normalized.data;
+            loadedLogLabels = normalized.labels;
+            const count = loadedLogData.events.length;
             setLoadedLogStatus(`${file.name} loaded (${count} events)`);
             renderLoadedLogValues();
+            renderRoadDynoSpeedOptions();
+            syncRoadDynoSourceUi();
             buildMonitorCharts();
             clearRoadDynoChart();
             currentDynoRange = null;
@@ -2695,6 +2832,8 @@
             loadedLogLabels = [];
             setLoadedLogStatus(`Failed to load ${file.name}`);
             renderLoadedLogValues();
+            renderRoadDynoSpeedOptions();
+            syncRoadDynoSourceUi();
             buildMonitorCharts();
             clearRoadDynoChart();
             currentDynoRange = null;
@@ -2706,6 +2845,8 @@
           loadedLogLabels = [];
           setLoadedLogStatus(`Read error: ${file.name}`);
           renderLoadedLogValues();
+          renderRoadDynoSpeedOptions();
+          syncRoadDynoSourceUi();
           buildMonitorCharts();
           clearRoadDynoChart();
           currentDynoRange = null;
@@ -3691,6 +3832,12 @@
           if (!data || typeof data !== "object") {
             return;
           }
+          if (["auto", "channel", "rpm"].includes(String(data.speedSourceMode))) {
+            roadDynoConfig.speedSourceMode = String(data.speedSourceMode);
+          }
+          if (typeof data.speedLabel === "string") {
+            roadDynoConfig.speedLabel = data.speedLabel;
+          }
           const fields = [
             ["vehicleMassKg", 200, 4000],
             ["driverMassKg", 0, 250],
@@ -3716,6 +3863,58 @@
         }
       }
 
+      function renderRoadDynoSpeedOptions() {
+        if (!dynoSpeedLabel) {
+          return;
+        }
+
+        const previousValue = dynoSpeedLabel.value;
+        const availableLabels = loadedLogLabels.slice().sort((a, b) => {
+          const aLooksSpeed = /speed|vss|wheel/i.test(a);
+          const bLooksSpeed = /speed|vss|wheel/i.test(b);
+          if (aLooksSpeed !== bLooksSpeed) {
+            return aLooksSpeed ? -1 : 1;
+          }
+          return a.localeCompare(b);
+        });
+        const fallbackDetected = findRoadDynoLabel(
+          availableLabels,
+          ["vehicle speed", "road speed", "wheel speed", "vss", "speed"],
+          { rejectTerms: ["engine speed", "engine rpm"] }
+        );
+        const selectedValue = previousValue || roadDynoConfig.speedLabel || fallbackDetected || "";
+
+        dynoSpeedLabel.innerHTML = "";
+
+        const autoOption = document.createElement("option");
+        autoOption.value = "";
+        autoOption.textContent = loadedLogLabels.length ? "Auto-detection" : "Charge un log";
+        dynoSpeedLabel.appendChild(autoOption);
+
+        availableLabels.forEach((label) => {
+          const option = document.createElement("option");
+          option.value = label;
+          option.textContent = label;
+          dynoSpeedLabel.appendChild(option);
+        });
+
+        if (selectedValue && availableLabels.includes(selectedValue)) {
+          dynoSpeedLabel.value = selectedValue;
+        } else {
+          dynoSpeedLabel.value = "";
+        }
+      }
+
+      function syncRoadDynoSourceUi() {
+        const mode = dynoSpeedSourceMode ? dynoSpeedSourceMode.value : roadDynoConfig.speedSourceMode;
+        if (dynoSpeedLabel) {
+          dynoSpeedLabel.disabled = mode !== "channel";
+        }
+        if (dynoRpm2Speed) {
+          dynoRpm2Speed.disabled = mode === "channel";
+        }
+      }
+
       function syncRoadDynoFilterLabel() {
         if (dynoFilterValue) {
           dynoFilterValue.textContent = String(roadDynoConfig.filterWindow);
@@ -3731,9 +3930,15 @@
         if (dynoLoss) dynoLoss.value = String(roadDynoConfig.drivetrainLossPct);
         if (dynoSlope) dynoSlope.value = String(roadDynoConfig.slopePct);
         if (dynoRho) dynoRho.value = String(roadDynoConfig.airDensityKgM3);
+        if (dynoSpeedSourceMode) dynoSpeedSourceMode.value = roadDynoConfig.speedSourceMode;
+        renderRoadDynoSpeedOptions();
+        if (dynoSpeedLabel && roadDynoConfig.speedLabel && loadedLogLabels.includes(roadDynoConfig.speedLabel)) {
+          dynoSpeedLabel.value = roadDynoConfig.speedLabel;
+        }
         if (dynoRpm2Speed) dynoRpm2Speed.value = String(roadDynoConfig.rpmToSpeedKmhPer1000);
         if (dynoFilterWindow) dynoFilterWindow.value = String(roadDynoConfig.filterWindow);
         syncRoadDynoFilterLabel();
+        syncRoadDynoSourceUi();
       }
 
       function readRoadDynoInputs() {
@@ -3746,6 +3951,8 @@
           drivetrainLossPct: Number(dynoLoss ? dynoLoss.value : roadDynoConfig.drivetrainLossPct),
           slopePct: Number(dynoSlope ? dynoSlope.value : roadDynoConfig.slopePct),
           airDensityKgM3: Number(dynoRho ? dynoRho.value : roadDynoConfig.airDensityKgM3),
+          speedSourceMode: String(dynoSpeedSourceMode ? dynoSpeedSourceMode.value : roadDynoConfig.speedSourceMode),
+          speedLabel: String(dynoSpeedLabel ? dynoSpeedLabel.value : roadDynoConfig.speedLabel),
           rpmToSpeedKmhPer1000: Number(dynoRpm2Speed ? dynoRpm2Speed.value : roadDynoConfig.rpmToSpeedKmhPer1000),
           filterWindow: Number(dynoFilterWindow ? dynoFilterWindow.value : roadDynoConfig.filterWindow),
         };
@@ -3773,6 +3980,12 @@
         if (!Number.isFinite(next.airDensityKgM3) || next.airDensityKgM3 < 0.9 || next.airDensityKgM3 > 1.4) {
           return false;
         }
+        if (!["auto", "channel", "rpm"].includes(next.speedSourceMode)) {
+          return false;
+        }
+        if (next.speedSourceMode === "channel" && !next.speedLabel) {
+          return false;
+        }
         if (!Number.isFinite(next.rpmToSpeedKmhPer1000) || next.rpmToSpeedKmhPer1000 < 5 || next.rpmToSpeedKmhPer1000 > 120) {
           return false;
         }
@@ -3789,15 +4002,49 @@
         return true;
       }
 
-      function findRoadDynoLabel(labels, candidates) {
-        const normalized = labels.map((label) => String(label).toLowerCase());
-        for (const candidate of candidates) {
-          const idx = normalized.findIndex((label) => label.includes(candidate));
-          if (idx !== -1) {
-            return labels[idx];
+      function findRoadDynoLabel(labels, candidates, options = {}) {
+        const { excludeLabels = [], rejectTerms = [] } = options;
+        const excluded = new Set(excludeLabels);
+        let bestLabel = null;
+        let bestScore = -1;
+
+        const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+        labels.forEach((label) => {
+          if (excluded.has(label)) {
+            return;
           }
-        }
-        return null;
+
+          const normalizedLabel = String(label || "").toLowerCase();
+          if (!normalizedLabel) {
+            return;
+          }
+          if (rejectTerms.some((term) => normalizedLabel.includes(String(term).toLowerCase()))) {
+            return;
+          }
+
+          candidates.forEach((candidate) => {
+            const normalizedCandidate = String(candidate || "").toLowerCase().trim();
+            if (!normalizedCandidate || !normalizedLabel.includes(normalizedCandidate)) {
+              return;
+            }
+
+            let score = normalizedCandidate.length;
+            if (normalizedLabel.startsWith(normalizedCandidate)) {
+              score += 20;
+            }
+            const candidatePattern = new RegExp(`(^|[^a-z0-9])${escapeRegExp(normalizedCandidate)}([^a-z0-9]|$)`);
+            if (candidatePattern.test(normalizedLabel)) {
+              score += 100;
+            }
+            if (score > bestScore) {
+              bestScore = score;
+              bestLabel = label;
+            }
+          });
+        });
+
+        return bestLabel;
       }
 
       function smoothSeries(values, windowSize = 5) {
@@ -3808,7 +4055,7 @@
         const half = Math.floor(normalizedWindow / 2);
         return values.map((_, index) => {
           let sum = 0;
-          let count = 0;
+          let weightSum = 0;
           for (let i = index - half; i <= index + half; i += 1) {
             if (i < 0 || i >= values.length) {
               continue;
@@ -3817,11 +4064,74 @@
             if (!Number.isFinite(v)) {
               continue;
             }
-            sum += v;
-            count += 1;
+            const distance = Math.abs(i - index);
+            const weight = half + 1 - distance;
+            sum += v * weight;
+            weightSum += weight;
           }
-          return count ? sum / count : values[index];
+          return weightSum ? sum / weightSum : values[index];
         });
+      }
+
+      function estimateLocalSeriesSlope(points, centerIndex, accessor, windowSize = 5) {
+        if (!Array.isArray(points) || !points.length || centerIndex < 0 || centerIndex >= points.length) {
+          return NaN;
+        }
+        const normalizedWindow = Math.max(3, windowSize % 2 === 0 ? windowSize + 1 : windowSize);
+        const half = Math.floor(normalizedWindow / 2);
+        const centerPoint = points[centerIndex];
+        const centerTs = Number(centerPoint && centerPoint.ts);
+        if (!Number.isFinite(centerTs)) {
+          return NaN;
+        }
+
+        let sumW = 0;
+        let sumT = 0;
+        let sumY = 0;
+        let sumTT = 0;
+        let sumTY = 0;
+
+        for (let i = Math.max(0, centerIndex - half); i <= Math.min(points.length - 1, centerIndex + half); i += 1) {
+          const point = points[i];
+          const ts = Number(point && point.ts);
+          const value = Number(accessor(point));
+          if (!Number.isFinite(ts) || !Number.isFinite(value)) {
+            continue;
+          }
+          const dt = (ts - centerTs) / 1000;
+          const distance = Math.abs(i - centerIndex);
+          const weight = half + 1 - distance;
+          sumW += weight;
+          sumT += weight * dt;
+          sumY += weight * value;
+          sumTT += weight * dt * dt;
+          sumTY += weight * dt * value;
+        }
+
+        const denominator = sumW * sumTT - sumT * sumT;
+        if (!Number.isFinite(denominator) || Math.abs(denominator) < 1e-9) {
+          return NaN;
+        }
+        return (sumW * sumTY - sumT * sumY) / denominator;
+      }
+
+      function aggregateRoadDynoBucket(values) {
+        if (!Array.isArray(values)) {
+          return null;
+        }
+        const filtered = values
+          .map((value) => Number(value))
+          .filter((value) => Number.isFinite(value))
+          .sort((a, b) => a - b);
+        if (!filtered.length) {
+          return null;
+        }
+        if (filtered.length <= 2) {
+          return filtered.reduce((sum, value) => sum + value, 0) / filtered.length;
+        }
+        const trimCount = filtered.length >= 7 ? 1 : 0;
+        const trimmed = filtered.slice(trimCount, filtered.length - trimCount || filtered.length);
+        return trimmed.reduce((sum, value) => sum + value, 0) / trimmed.length;
       }
 
       function clearRoadDynoChart() {
@@ -4064,11 +4374,111 @@
         };
       }
 
+      function getRoadDynoPeakPoint(rpm, values) {
+        if (!Array.isArray(rpm) || !Array.isArray(values) || rpm.length !== values.length) {
+          return null;
+        }
+        let bestIndex = -1;
+        let bestValue = -Infinity;
+        for (let i = 0; i < values.length; i += 1) {
+          const currentValue = Number(values[i]);
+          const currentRpm = Number(rpm[i]);
+          if (!Number.isFinite(currentValue) || !Number.isFinite(currentRpm)) {
+            continue;
+          }
+          if (currentValue > bestValue) {
+            bestValue = currentValue;
+            bestIndex = i;
+          }
+        }
+        if (bestIndex < 0) {
+          return null;
+        }
+        return {
+          index: bestIndex,
+          rpm: Number(rpm[bestIndex]),
+          value: Number(values[bestIndex]),
+        };
+      }
+
+      function drawRoadDynoPeakCallout(u, point, scaleKey, color, unit, variant = "top") {
+        if (!u || !point || !Number.isFinite(point.rpm) || !Number.isFinite(point.value)) {
+          return;
+        }
+
+        const x = u.valToPos(point.rpm, "x", true);
+        const y = u.valToPos(point.value, scaleKey, true);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+          return;
+        }
+
+        const ctx = u.ctx;
+        const line1 = `${point.value.toFixed(1)} ${unit}`;
+        const line2 = `@ ${Math.round(point.rpm)} rpm`;
+        const paddingX = 10;
+        const paddingY = 8;
+        const lineGap = 5;
+        const textHeight = 12;
+        const boxHeight = paddingY * 2 + textHeight * 2 + lineGap;
+
+        ctx.save();
+        ctx.font = '700 12px "Segoe UI", sans-serif';
+        const width = Math.max(ctx.measureText(line1).width, ctx.measureText(line2).width) + paddingX * 2;
+
+        const preferRight = x < u.bbox.left + u.bbox.width * 0.62;
+        const anchorX = preferRight ? x + 18 : x - 18;
+        let boxX = preferRight ? anchorX : anchorX - width;
+        let boxY = variant === "bottom" ? y + 14 : y - boxHeight - 14;
+
+        const minX = u.bbox.left + 4;
+        const maxX = u.bbox.left + u.bbox.width - width - 4;
+        const minY = u.bbox.top + 4;
+        const maxY = u.bbox.top + u.bbox.height - boxHeight - 4;
+        boxX = Math.max(minX, Math.min(maxX, boxX));
+        boxY = Math.max(minY, Math.min(maxY, boxY));
+
+        const targetX = Math.max(boxX + 10, Math.min(boxX + width - 10, x));
+        const targetY = variant === "bottom" ? boxY : boxY + boxHeight;
+
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(targetX, targetY);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.fillStyle = "#0f1b28";
+        ctx.strokeStyle = color;
+        ctx.roundRect(boxX, boxY, width, boxHeight, 10);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.fillStyle = color;
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.arc(x, y, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.textBaseline = "top";
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(line1, boxX + paddingX, boxY + paddingY);
+        ctx.font = '600 12px "Segoe UI", sans-serif';
+        ctx.fillStyle = "rgba(255,255,255,0.82)";
+        ctx.fillText(line2, boxX + paddingX, boxY + paddingY + textHeight + lineGap);
+        ctx.restore();
+      }
+
       function renderRoadDynoChart(rpm, hp, nm) {
         if (!dynoChartRoot || !window.uPlot || !rpm.length) {
           return;
         }
         clearRoadDynoChart();
+        const peakHp = getRoadDynoPeakPoint(rpm, hp);
+        const peakNm = getRoadDynoPeakPoint(rpm, nm);
         const width = Math.max(300, dynoChartRoot.clientWidth || 700);
         const rootParent = dynoChartRoot.parentElement;
         const height = rootParent
@@ -4096,6 +4506,14 @@
               ],
               legend: { show: true },
               cursor: { y: false, points: { show: false } },
+              hooks: {
+                draw: [
+                  (u) => {
+                    drawRoadDynoPeakCallout(u, peakHp, "hp", "#f39c12", "hp", "top");
+                    drawRoadDynoPeakCallout(u, peakNm, "nm", "#2ecc71", "Nm", "bottom");
+                  },
+                ],
+              },
             },
             [rpm, hp, nm],
             dynoChartRoot
@@ -4168,8 +4586,9 @@
           `# drivetrain_loss_pct,${cfg.drivetrainLossPct}`,
           `# slope_pct,${cfg.slopePct}`,
           `# air_density_kg_m3,${cfg.airDensityKgM3}`,
+          `# speed_source_mode,${cfg.speedSourceMode || "auto"}`,
           `# rpm_to_speed_kmh_per_1000,${cfg.rpmToSpeedKmhPer1000}`,
-          `# smoothing_window,${cfg.filterWindow}`,
+          `# acceleration_window,${cfg.filterWindow}`,
           `# speed_source,${(roadDynoLastResult.labels && roadDynoLastResult.labels.speedLabel) || "estimated_from_rpm"}`,
           "rpm,hp,nm",
         ];
@@ -4191,11 +4610,34 @@
           return;
         }
         const labels = loadedLogLabels.slice();
-        const rpmLabel = findRoadDynoLabel(labels, ["engine speed", "rpm"]);
-        const speedLabel = findRoadDynoLabel(labels, ["vehicle speed", "vss", "speed"]);
+        const rpmLabel = findRoadDynoLabel(labels, ["engine speed", "engine rpm", "rpm"]);
         if (!rpmLabel) {
           setRoadDynoStatus("Impossible de trouver RPM dans le log.");
           return;
+        }
+
+        const autoDetectedSpeedLabel = findRoadDynoLabel(
+          labels,
+          ["vehicle speed", "road speed", "wheel speed", "vss", "speed"],
+          { excludeLabels: rpmLabel ? [rpmLabel] : [], rejectTerms: ["engine speed", "engine rpm"] }
+        );
+        let speedLabel = null;
+        let useEstimatedSpeed = false;
+        if (roadDynoConfig.speedSourceMode === "rpm") {
+          useEstimatedSpeed = true;
+        } else if (roadDynoConfig.speedSourceMode === "channel") {
+          if (!roadDynoConfig.speedLabel) {
+            setRoadDynoStatus("Choisis un canal vitesse dans les options Dyno.");
+            return;
+          }
+          if (!labels.includes(roadDynoConfig.speedLabel)) {
+            setRoadDynoStatus("Le canal vitesse choisi n'existe pas dans ce log.");
+            return;
+          }
+          speedLabel = roadDynoConfig.speedLabel;
+        } else {
+          speedLabel = autoDetectedSpeedLabel;
+          useEstimatedSpeed = !speedLabel;
         }
 
         const selectedEvents = (currentDynoRange && Number.isFinite(currentDynoRange.minTs))
@@ -4204,8 +4646,6 @@
               return Number.isFinite(ts) && ts >= currentDynoRange.minTs && ts <= currentDynoRange.maxTs;
             })
           : loadedLogData.events;
-
-        const useEstimatedSpeed = !speedLabel;
 
         const pull = useEstimatedSpeed
           ? detectBestRoadDynoPullFromRpm(selectedEvents, rpmLabel)
@@ -4223,42 +4663,43 @@
         const g = 9.80665;
         const slopeRad = Math.atan(roadDynoConfig.slopePct / 100);
         const driveEff = Math.max(0.35, 1 - roadDynoConfig.drivetrainLossPct / 100);
+        const derivativeWindow = Math.max(3, roadDynoConfig.filterWindow % 2 === 0 ? roadDynoConfig.filterWindow + 1 : roadDynoConfig.filterWindow);
+
+        const dynoPoints = pull.points
+          .map((point) => {
+            const ts = Number(point && point.ts);
+            const rpm = Number(point && point.rpm);
+            const speedMs = useEstimatedSpeed
+              ? ((rpm / 1000) * roadDynoConfig.rpmToSpeedKmhPer1000) / 3.6
+              : Number(point && point.speedMs);
+            if (!Number.isFinite(ts) || !Number.isFinite(rpm) || !Number.isFinite(speedMs)) {
+              return null;
+            }
+            return { ts, rpm, speedMs };
+          })
+          .filter((point) => point && point.speedMs >= 0 && point.speedMs <= 120);
 
         const bins = new Map();
         let rawCount = 0;
-        for (let i = 1; i < pull.points.length; i += 1) {
-          const prev = pull.points[i - 1];
-          const curr = pull.points[i];
-          const t0 = Number(prev && prev.ts);
-          const t1 = Number(curr && curr.ts);
-          if (!Number.isFinite(t0) || !Number.isFinite(t1) || t1 <= t0) {
+        for (let i = 0; i < dynoPoints.length; i += 1) {
+          const point = dynoPoints[i];
+          if (!point) {
             continue;
           }
-          const dt = (t1 - t0) / 1000;
-          if (!Number.isFinite(dt) || dt < 0.03 || dt > 1.2) {
-            continue;
-          }
-          const rpm0 = Number(prev && prev.rpm);
-          const rpm1 = Number(curr && curr.rpm);
-          const v0 = useEstimatedSpeed
-            ? ((rpm0 / 1000) * roadDynoConfig.rpmToSpeedKmhPer1000) / 3.6
-            : Number(prev && prev.speedMs);
-          const v1 = useEstimatedSpeed
-            ? ((rpm1 / 1000) * roadDynoConfig.rpmToSpeedKmhPer1000) / 3.6
-            : Number(curr && curr.speedMs);
-          if (!Number.isFinite(rpm0) || !Number.isFinite(rpm1) || !Number.isFinite(v0) || !Number.isFinite(v1)) {
-            continue;
-          }
-          const rpm = (rpm0 + rpm1) * 0.5;
+          const rpm = point.rpm;
           if (!Number.isFinite(rpm) || rpm < 900) {
             continue;
           }
-          const v = (v0 + v1) * 0.5;
+          const v = point.speedMs;
           if (!Number.isFinite(v) || v < 2 || v > 120) {
             continue;
           }
-          const accel = (v1 - v0) / dt;
+          const accel = estimateLocalSeriesSlope(dynoPoints, i, (sample) => sample.speedMs, derivativeWindow);
           if (!Number.isFinite(accel) || accel < -2 || accel > 12) {
+            continue;
+          }
+          const rpmRate = estimateLocalSeriesSlope(dynoPoints, i, (sample) => sample.rpm, derivativeWindow);
+          if (!Number.isFinite(rpmRate) || rpmRate < 40) {
             continue;
           }
           const drag = 0.5 * rho * cxArea * v * v;
@@ -4281,11 +4722,11 @@
           }
           const rpmBin = Math.round(rpm / 100) * 100;
           if (!bins.has(rpmBin)) {
-            bins.set(rpmBin, { hpSum: 0, nmSum: 0, count: 0 });
+            bins.set(rpmBin, { hpValues: [], nmValues: [], count: 0 });
           }
           const bucket = bins.get(rpmBin);
-          bucket.hpSum += hp;
-          bucket.nmSum += torqueNm;
+          bucket.hpValues.push(hp);
+          bucket.nmValues.push(torqueNm);
           bucket.count += 1;
           rawCount += 1;
         }
@@ -4298,26 +4739,33 @@
         }
         const hp = rpm.map((key) => {
           const bucket = bins.get(key);
-          return bucket.count ? bucket.hpSum / bucket.count : null;
+          return bucket && bucket.count ? aggregateRoadDynoBucket(bucket.hpValues) : null;
         });
         const nm = rpm.map((key) => {
           const bucket = bins.get(key);
-          return bucket.count ? bucket.nmSum / bucket.count : null;
+          return bucket && bucket.count ? aggregateRoadDynoBucket(bucket.nmValues) : null;
         });
-        const hpSmooth = smoothSeries(hp, roadDynoConfig.filterWindow);
-        const nmSmooth = smoothSeries(nm, roadDynoConfig.filterWindow);
-        const maxHp = Math.max(...hpSmooth.filter((v) => Number.isFinite(v)));
-        const maxNm = Math.max(...nmSmooth.filter((v) => Number.isFinite(v)));
-        const maxHpRpm = rpm[hpSmooth.findIndex((v) => v === maxHp)];
-        const maxNmRpm = rpm[nmSmooth.findIndex((v) => v === maxNm)];
+        const hpCurve = hp.slice();
+        const nmCurve = nm.slice();
+        const finiteHp = hpCurve.filter((v) => Number.isFinite(v));
+        const finiteNm = nmCurve.filter((v) => Number.isFinite(v));
+        if (!finiteHp.length || !finiteNm.length) {
+          clearRoadDynoChart();
+          setRoadDynoStatus("Pas assez de donnees exploitables pour calculer la courbe.");
+          return;
+        }
+        const maxHp = Math.max(...finiteHp);
+        const maxNm = Math.max(...finiteNm);
+        const maxHpRpm = rpm[hpCurve.findIndex((v) => v === maxHp)];
+        const maxNmRpm = rpm[nmCurve.findIndex((v) => v === maxNm)];
 
-        renderRoadDynoChart(rpm, hpSmooth, nmSmooth);
+        renderRoadDynoChart(rpm, hpCurve, nmCurve);
         const durationS = (pull.endTs - pull.startTs) / 1000;
         roadDynoLastResult = {
           computedAt: new Date().toISOString(),
           rpm: rpm.slice(),
-          hp: hpSmooth.slice(),
-          nm: nmSmooth.slice(),
+          hp: hpCurve.slice(),
+          nm: nmCurve.slice(),
           rawPointsUsed: rawCount,
           config: { ...roadDynoConfig },
           labels: { rpmLabel, speedLabel: speedLabel || "estimated_from_rpm" },
@@ -4328,8 +4776,10 @@
             durationS,
           },
         };
-        const modeText = useEstimatedSpeed ? `Mode estime (rpm->km/h: ${roadDynoConfig.rpmToSpeedKmhPer1000.toFixed(1)} @1000rpm)` : `Canal vitesse: ${speedLabel}`;
-        setRoadDynoStatus(`Pull detecte ${Math.round(pull.startRpm)} -> ${Math.round(pull.peakRpm)} rpm (${durationS.toFixed(1)}s) | ${modeText} | Filtre ${roadDynoConfig.filterWindow} | Max ${maxHp.toFixed(1)} hp @ ${maxHpRpm} rpm | Max ${maxNm.toFixed(1)} Nm @ ${maxNmRpm} rpm`);
+        const modeText = useEstimatedSpeed
+          ? `Mode estime (rpm->km/h: ${roadDynoConfig.rpmToSpeedKmhPer1000.toFixed(1)} @1000rpm)`
+          : `Canal vitesse: ${speedLabel}${roadDynoConfig.speedSourceMode === "auto" ? " (auto)" : ""}`;
+        setRoadDynoStatus(`Pull detecte ${Math.round(pull.startRpm)} -> ${Math.round(pull.peakRpm)} rpm (${durationS.toFixed(1)}s) | ${modeText} | Fenetre accel ${derivativeWindow} | Max ${maxHp.toFixed(1)} hp @ ${maxHpRpm} rpm | Max ${maxNm.toFixed(1)} Nm @ ${maxNmRpm} rpm`);
       }
 
       function updatePanelValues(sample) {
@@ -5056,6 +5506,19 @@
           }
           dynoFilterWindow.value = String(roadDynoConfig.filterWindow);
           syncRoadDynoFilterLabel();
+          saveRoadDynoConfig();
+        });
+      }
+      if (dynoSpeedSourceMode) {
+        dynoSpeedSourceMode.addEventListener("change", () => {
+          roadDynoConfig.speedSourceMode = dynoSpeedSourceMode.value;
+          syncRoadDynoSourceUi();
+          saveRoadDynoConfig();
+        });
+      }
+      if (dynoSpeedLabel) {
+        dynoSpeedLabel.addEventListener("change", () => {
+          roadDynoConfig.speedLabel = dynoSpeedLabel.value;
           saveRoadDynoConfig();
         });
       }
