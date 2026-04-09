@@ -104,6 +104,127 @@
         color: var(--muted);
       }
 
+      .dyno-grid {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .dyno-chart {
+        min-height: 220px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(9, 18, 28, 0.45);
+        overflow: hidden;
+      }
+
+      .dyno-status {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .dyno-range-info {
+        font-size: 12px;
+        color: var(--accent);
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .dyno-panel {
+        display: none;
+        flex-direction: column;
+        gap: 14px;
+        min-height: 0;
+      }
+
+      /* Must outrank .tab-panel.active { display: block } which has equal specificity but comes later */
+      .tab-panel.dyno-panel.active {
+        display: flex;
+      }
+
+      .dyno-layout {
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: 270px minmax(0, 1fr);
+        grid-template-rows: 1fr;
+        gap: 14px;
+      }
+
+      .dyno-params-col {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        overflow-y: auto;
+        padding-right: 2px;
+      }
+
+      .dyno-chart-col {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .dyno-chart-col .dyno-chart {
+        flex: 1;
+        min-height: 0;
+        min-width: 0;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(9, 18, 28, 0.45);
+        overflow: hidden;
+      }
+
+      .monitor-context-menu {
+        position: fixed;
+        z-index: 200;
+        background: rgba(10, 21, 32, 0.98);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 12px;
+        padding: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 200px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+      }
+
+      .monitor-context-menu.hidden {
+        display: none;
+      }
+
+      .monitor-context-item {
+        width: 100%;
+        text-align: left;
+        padding: 9px 14px;
+        border: none;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--text);
+        font-size: 13px;
+        cursor: pointer;
+        letter-spacing: 0.01em;
+        font-family: inherit;
+      }
+
+      .monitor-context-item:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: var(--accent);
+      }
+
+      .monitor-context-separator {
+        height: 1px;
+        background: rgba(255, 255, 255, 0.08);
+        margin: 4px 6px;
+      }
+
       .button {
         border: none;
         border-radius: 999px;
@@ -521,11 +642,23 @@
         width: 100%;
         flex: 1;
         min-height: 0;
+        border-radius: 10px;
+        transition: box-shadow 0.2s, border 0.2s;
+      }
+
+      .chart-wrapper.is-recording {
+        box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.9), 0 0 18px 2px rgba(220, 38, 38, 0.35);
       }
 
       #history-chart {
         width: 100%;
         height: 100%;
+      }
+
+      #record-toggle.recording-active {
+        background: rgba(220, 38, 38, 0.18);
+        border-color: rgba(220, 38, 38, 0.7);
+        color: rgb(248, 113, 113);
       }
 
       .chart-tooltip {
@@ -848,6 +981,7 @@
         <div class="tabs">
           <button class="tab active" data-tab="overview">Overview</button>
           <button class="tab" data-tab="monitor">Monitor</button>
+          <button class="tab" data-tab="dyno">Dyno</button>
           <button class="tab" data-tab="raw">Raw Data</button>
           <button class="tab" data-tab="settings">Settings</button>
         </div>
@@ -892,6 +1026,70 @@
               <div class="monitor-nav-time" id="monitor-nav-time"></div>
               <input class="monitor-nav-slider" id="monitor-nav-slider" type="range" min="0" max="0" step="1" value="0" />
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card tab-panel dyno-panel" data-panel="dyno">
+        <div class="panel-header">
+          <strong>Road Dyno</strong>
+          <div class="panel-actions">
+            <span class="dyno-range-info" id="dyno-range-info">Selectionne une plage dans Monitor (clic droit → Dyno)</span>
+            <button class="button" id="dyno-export">Exporter CSV</button>
+          </div>
+        </div>
+        <div class="dyno-layout">
+          <div class="dyno-params-col">
+            <div class="dyno-grid">
+              <div class="overlay-field">
+                <label for="dyno-mass">Masse vehicule (kg)</label>
+                <input class="value-input" id="dyno-mass" type="number" min="200" max="4000" step="1" />
+              </div>
+              <div class="overlay-field">
+                <label for="dyno-driver-mass">Masse conducteur (kg)</label>
+                <input class="value-input" id="dyno-driver-mass" type="number" min="0" max="250" step="1" />
+              </div>
+              <div class="overlay-field">
+                <label for="dyno-cx">Cx</label>
+                <input class="value-input" id="dyno-cx" type="number" min="0.1" max="1" step="0.001" />
+              </div>
+              <div class="overlay-field">
+                <label for="dyno-area">Surface frontale (m²)</label>
+                <input class="value-input" id="dyno-area" type="number" min="0.8" max="4" step="0.01" />
+              </div>
+              <div class="overlay-field">
+                <label for="dyno-crr">Coeff. roulement (Crr)</label>
+                <input class="value-input" id="dyno-crr" type="number" min="0.004" max="0.03" step="0.0005" />
+              </div>
+              <div class="overlay-field">
+                <label for="dyno-loss">Pertes transmission (%)</label>
+                <input class="value-input" id="dyno-loss" type="number" min="0" max="40" step="0.1" />
+              </div>
+              <div class="overlay-field">
+                <label for="dyno-slope">Pente route (%)</label>
+                <input class="value-input" id="dyno-slope" type="number" min="-20" max="20" step="0.1" />
+              </div>
+              <div class="overlay-field">
+                <label for="dyno-rho">Densite air (kg/m³)</label>
+                <input class="value-input" id="dyno-rho" type="number" min="0.9" max="1.4" step="0.001" />
+              </div>
+              <div class="overlay-field">
+                <label for="dyno-rpm2speed">Vitesse @1000 rpm (km/h, rapport du pull)</label>
+                <input class="value-input" id="dyno-rpm2speed" type="number" min="5" max="120" step="0.1" />
+              </div>
+            </div>
+            <div class="overlay-field">
+              <label for="dyno-filter-window">Filtrage: <span id="dyno-filter-value">5</span></label>
+              <input class="monitor-zoom" id="dyno-filter-window" type="range" min="1" max="17" step="2" value="5" />
+            </div>
+            <div class="controls">
+              <button class="button" id="dyno-calc">Calculer courbe</button>
+              <button class="button" id="dyno-clear">Effacer courbe</button>
+            </div>
+          </div>
+          <div class="dyno-chart-col">
+            <div class="dyno-status" id="dyno-status">Selectionne une plage dans Monitor (clic droit → Dyno) puis calcule.</div>
+            <div class="dyno-chart" id="dyno-chart"></div>
           </div>
         </div>
       </div>
@@ -971,6 +1169,13 @@
       </div>
     </main>
     <input class="hidden-input" id="load-log-input" type="file" accept=".json,application/json" />
+    <div class="monitor-context-menu hidden" id="monitor-context-menu">
+      <button class="monitor-context-item" id="monitor-ctx-zoom">⊞ Zoomer la sélection</button>
+      <button class="monitor-context-item" id="monitor-ctx-dyno-pl">▶ Dyno — cette sélection</button>
+      <div class="monitor-context-separator"></div>
+      <button class="monitor-context-item" id="monitor-ctx-dyno-view">▶ Dyno — vue actuelle</button>
+      <button class="monitor-context-item" id="monitor-ctx-reset">↺ Réinitialiser le zoom</button>
+    </div>
     <footer class="footer-bar">
       <div class="footer-actions">
       </div>
@@ -1092,6 +1297,24 @@
       const panelApply = document.getElementById("panel-apply");
       const monitorCount = document.getElementById("monitor-count");
       const monitorApply = document.getElementById("monitor-apply");
+      const dynoMass = document.getElementById("dyno-mass");
+      const dynoDriverMass = document.getElementById("dyno-driver-mass");
+      const dynoCx = document.getElementById("dyno-cx");
+      const dynoArea = document.getElementById("dyno-area");
+      const dynoCrr = document.getElementById("dyno-crr");
+      const dynoLoss = document.getElementById("dyno-loss");
+      const dynoSlope = document.getElementById("dyno-slope");
+      const dynoRho = document.getElementById("dyno-rho");
+      const dynoRpm2Speed = document.getElementById("dyno-rpm2speed");
+      const dynoFilterWindow = document.getElementById("dyno-filter-window");
+      const dynoFilterValue = document.getElementById("dyno-filter-value");
+      const dynoCalc = document.getElementById("dyno-calc");
+      const dynoClear = document.getElementById("dyno-clear");
+      const dynoExport = document.getElementById("dyno-export");
+      const dynoStatus = document.getElementById("dyno-status");
+      const dynoChartRoot = document.getElementById("dyno-chart");
+      const dynoRangeInfo = document.getElementById("dyno-range-info");
+      const monitorContextMenu = document.getElementById("monitor-context-menu");
       const loadedLogValues = document.getElementById("loaded-log-values");
       const valueRefreshRate = document.getElementById("value-refresh-rate");
       const chartRefreshRate = document.getElementById("chart-refresh-rate");
@@ -1188,6 +1411,7 @@
       let chartRenderIntervalMs = 50;
       const historyMergeThresholdMs = 80;
       const displaySettingsKey = "gkflasher.displaySettings";
+      const roadDynoConfigKey = "gkflasher.roadDynoConfig";
       let isRecording = false;
       let recordedEvents = [];
       let loadedLogData = null;
@@ -1198,6 +1422,25 @@
       let monitorHoverTs = null;
       let monitorCursorSyncing = false;
       let monitorScaleSyncing = false;
+      let roadDynoChart = null;
+      let roadDynoResizeObserver = null;
+      let roadDynoLastResult = null;
+      let currentDynoRange = null;
+      let monitorPendingSelection = null;
+      let monitorContextViewRange = null;
+      const monitorLastMousePos = { x: 0, y: 0 };
+      const roadDynoConfig = {
+        vehicleMassKg: 1350,
+        driverMassKg: 75,
+        cx: 0.31,
+        frontalAreaM2: 2.1,
+        crr: 0.012,
+        drivetrainLossPct: 15,
+        slopePct: 0,
+        airDensityKgM3: 1.184,
+        rpmToSpeedKmhPer1000: 30,
+        filterWindow: 5,
+      };
 
       const engineDisplacementL = 1.975;
       const engineCylinders = 4;
@@ -2279,6 +2522,11 @@
       function setRecordingUiState() {
         if (recordToggle) {
           recordToggle.textContent = isRecording ? "Stop recording" : "Start recording";
+          recordToggle.classList.toggle("recording-active", isRecording);
+        }
+        const chartWrapper = document.querySelector(".chart-wrapper");
+        if (chartWrapper) {
+          chartWrapper.classList.toggle("is-recording", isRecording);
         }
       }
 
@@ -2312,20 +2560,22 @@
         });
       }
 
-      function downloadRecordedLog() {
+      async function downloadRecordedLog() {
         const payload = {
           exported_at: new Date().toISOString(),
           labels: currentLabels.filter((label) => !hiddenLabels.has(label)),
           events: recordedEvents,
         };
-        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
+        const json = JSON.stringify(payload, null, 2);
         const now = new Date();
         const timePart = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", hour12: false }).replace(/:/g, "-");
         const datePart = now.toLocaleDateString("fr-FR").replace(/\//g, "-");
+        const suggestedName = `Log ${timePart} ${datePart}.json`;
+        const blob = new Blob([json], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
         link.href = url;
-        link.download = `Log ${timePart} ${datePart}.json`;
+        link.download = suggestedName;
         document.body.appendChild(link);
         link.click();
         link.remove();
@@ -2436,12 +2686,19 @@
             setLoadedLogStatus(`${file.name} loaded (${count} events)`);
             renderLoadedLogValues();
             buildMonitorCharts();
+            clearRoadDynoChart();
+            currentDynoRange = null;
+            if (dynoRangeInfo) dynoRangeInfo.textContent = "Selectionne une plage dans Monitor (clic droit \u2192 Dyno)";
+            setRoadDynoStatus(`Log charge: ${file.name}. Selectionne une plage dans Monitor puis clic droit \u2192 Dyno.`);
           } catch (error) {
             loadedLogData = null;
             loadedLogLabels = [];
             setLoadedLogStatus(`Failed to load ${file.name}`);
             renderLoadedLogValues();
             buildMonitorCharts();
+            clearRoadDynoChart();
+            currentDynoRange = null;
+            setRoadDynoStatus("Aucun log valide pour le calcul dyno.");
           }
         });
         reader.addEventListener("error", () => {
@@ -2450,6 +2707,9 @@
           setLoadedLogStatus(`Read error: ${file.name}`);
           renderLoadedLogValues();
           buildMonitorCharts();
+          clearRoadDynoChart();
+          currentDynoRange = null;
+          setRoadDynoStatus("Erreur de lecture du log.");
         });
         reader.readAsText(file);
       }
@@ -2972,6 +3232,82 @@
         updateMonitorNavTimeUi(windowRatio);
       }
 
+      // ── Monitor context menu helpers ──────────────────────────────────────────
+
+      function applyZoomRange(minTs, maxTs) {
+        const range = getMonitorLogTimeRange();
+        if (!range) return;
+        monitorScaleSyncing = true;
+        try {
+          monitorChartContexts.forEach((ctx) => {
+            if (ctx && ctx.chart) {
+              try { ctx.chart.setScale("x", { min: minTs, max: maxTs }); } catch (e) {}
+            }
+          });
+        } finally {
+          monitorScaleSyncing = false;
+        }
+        const windowDuration = maxTs - minTs;
+        const windowRatio = Math.max(0.0001, Math.min(1, windowDuration / range.total));
+        const maxStartOffset = Math.max(0, range.total - windowDuration);
+        const startOffset = Math.max(0, minTs - range.minTs);
+        const offsetRatio = maxStartOffset > 0 ? Math.max(0, Math.min(1, startOffset / maxStartOffset)) : 0;
+        monitorConfig.zoom = 1 / windowRatio;
+        monitorConfig.offset = offsetRatio;
+        saveMonitorConfig();
+        updateMonitorViewportUi();
+        updateMonitorNavTimeUi(windowRatio);
+      }
+
+      function openDynoWithRange(minTs, maxTs) {
+        currentDynoRange = { minTs, maxTs };
+        if (dynoRangeInfo) {
+          if (loadedLogData && Array.isArray(loadedLogData.events) && loadedLogData.events.length) {
+            const logStart = Number(loadedLogData.events[0].ts);
+            const s = formatMonitorDuration(minTs - logStart);
+            const e = formatMonitorDuration(maxTs - logStart);
+            const dur = formatMonitorDuration(maxTs - minTs);
+            dynoRangeInfo.textContent = `${s} \u2192 ${e}  (dur\u00e9e: ${dur})`;
+          } else {
+            dynoRangeInfo.textContent = `Plage s\u00e9lectionn\u00e9e`;
+          }
+        }
+        // Switch to Dyno tab
+        tabs.forEach((t) => t.classList.toggle("active", t.dataset.tab === "dyno"));
+        panels.forEach((p) => p.classList.toggle("active", p.dataset.panel === "dyno"));
+        // Auto-compute
+        computeRoadDynoFromLoadedLog();
+      }
+
+      function showMonitorContextMenu(x, y, hasDragSelection) {
+        if (!monitorContextMenu) return;
+        const ctxZoom = document.getElementById("monitor-ctx-zoom");
+        const ctxDynoPl = document.getElementById("monitor-ctx-dyno-pl");
+        const ctxSep = monitorContextMenu.querySelector(".monitor-context-separator");
+        if (ctxZoom) ctxZoom.style.display = hasDragSelection ? "" : "none";
+        if (ctxDynoPl) ctxDynoPl.style.display = hasDragSelection ? "" : "none";
+        if (ctxSep) ctxSep.style.display = hasDragSelection ? "" : "none";
+        const menuW = 220;
+        const menuH = hasDragSelection ? 148 : 80;
+        const left = Math.max(8, Math.min(x + 4, window.innerWidth - menuW - 8));
+        const top = Math.max(8, Math.min(y + 4, window.innerHeight - menuH - 8));
+        monitorContextMenu.style.left = `${left}px`;
+        monitorContextMenu.style.top = `${top}px`;
+        monitorContextMenu.classList.remove("hidden");
+      }
+
+      function hideMonitorContextMenu() {
+        if (!monitorContextMenu) return;
+        monitorContextMenu.classList.add("hidden");
+        monitorPendingSelection = null;
+        // Clear uPlot drag selections
+        monitorChartContexts.forEach((ctx) => {
+          if (ctx && ctx.chart) {
+            try { ctx.chart.setSelect({ left: 0, top: 0, width: 0, height: 0 }, false); } catch (e) {}
+          }
+        });
+      }
+
       function syncMonitorCursorToLeft(sourceChart, sourceLeft) {
         if (monitorCursorSyncing) {
           return;
@@ -3091,7 +3427,7 @@
                 })),
               ],
               legend: { show: false },
-              cursor: { y: false, points: { show: false } },
+              cursor: { y: false, points: { show: false }, drag: { x: true, y: false, setScale: false } },
               hooks: {
                 setCursor: [
                   (u) => {
@@ -3122,6 +3458,20 @@
                     syncMonitorScaleFromChart(u);
                   },
                 ],
+                setSelect: [
+                  (u) => {
+                    const sel = u.select;
+                    if (!sel || sel.width <= 0) return;
+                    const minTs = u.posToVal(sel.left, "x");
+                    const maxTs = u.posToVal(sel.left + sel.width, "x");
+                    if (!Number.isFinite(minTs) || !Number.isFinite(maxTs) || maxTs <= minTs) return;
+                    monitorPendingSelection = { minTs, maxTs };
+                    if (u.scales && u.scales.x && Number.isFinite(u.scales.x.min)) {
+                      monitorContextViewRange = { minTs: u.scales.x.min, maxTs: u.scales.x.max };
+                    }
+                    showMonitorContextMenu(monitorLastMousePos.x, monitorLastMousePos.y, true);
+                  },
+                ],
               },
             },
             data,
@@ -3131,6 +3481,23 @@
           containerEl.textContent = "Erreur de rendu.";
           return null;
         }
+        // Track mouse position for context menu placement
+        containerEl.addEventListener("mousemove", (e) => {
+          monitorLastMousePos.x = e.clientX;
+          monitorLastMousePos.y = e.clientY;
+        }, { passive: true });
+        // Right-click: show context menu for the current visible range
+        containerEl.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          monitorPendingSelection = null;
+          if (chart && chart.scales && chart.scales.x) {
+            const xs = chart.scales.x;
+            if (Number.isFinite(xs.min) && Number.isFinite(xs.max) && xs.max > xs.min) {
+              monitorContextViewRange = { minTs: xs.min, maxTs: xs.max };
+            }
+          }
+          showMonitorContextMenu(e.clientX, e.clientY, false);
+        });
         return {
           chart,
           labels: assignedLabels,
@@ -3299,6 +3666,670 @@
         }
         saveDisplaySettings();
         syncSettingsInputs();
+      }
+
+      function setRoadDynoStatus(text) {
+        if (dynoStatus) {
+          dynoStatus.textContent = text;
+        }
+      }
+
+      function saveRoadDynoConfig() {
+        try {
+          localStorage.setItem(roadDynoConfigKey, JSON.stringify(roadDynoConfig));
+        } catch (error) {
+        }
+      }
+
+      function loadRoadDynoConfig() {
+        try {
+          const raw = localStorage.getItem(roadDynoConfigKey);
+          if (!raw) {
+            return;
+          }
+          const data = JSON.parse(raw);
+          if (!data || typeof data !== "object") {
+            return;
+          }
+          const fields = [
+            ["vehicleMassKg", 200, 4000],
+            ["driverMassKg", 0, 250],
+            ["cx", 0.1, 1],
+            ["frontalAreaM2", 0.8, 4],
+            ["crr", 0.004, 0.03],
+            ["drivetrainLossPct", 0, 40],
+            ["slopePct", -20, 20],
+            ["airDensityKgM3", 0.9, 1.4],
+            ["rpmToSpeedKmhPer1000", 5, 120],
+            ["filterWindow", 1, 17],
+          ];
+          fields.forEach(([key, min, max]) => {
+            const v = Number(data[key]);
+            if (Number.isFinite(v)) {
+              roadDynoConfig[key] = Math.max(min, Math.min(max, v));
+            }
+          });
+          if (roadDynoConfig.filterWindow % 2 === 0) {
+            roadDynoConfig.filterWindow += 1;
+          }
+        } catch (error) {
+        }
+      }
+
+      function syncRoadDynoFilterLabel() {
+        if (dynoFilterValue) {
+          dynoFilterValue.textContent = String(roadDynoConfig.filterWindow);
+        }
+      }
+
+      function syncRoadDynoInputs() {
+        if (dynoMass) dynoMass.value = String(roadDynoConfig.vehicleMassKg);
+        if (dynoDriverMass) dynoDriverMass.value = String(roadDynoConfig.driverMassKg);
+        if (dynoCx) dynoCx.value = String(roadDynoConfig.cx);
+        if (dynoArea) dynoArea.value = String(roadDynoConfig.frontalAreaM2);
+        if (dynoCrr) dynoCrr.value = String(roadDynoConfig.crr);
+        if (dynoLoss) dynoLoss.value = String(roadDynoConfig.drivetrainLossPct);
+        if (dynoSlope) dynoSlope.value = String(roadDynoConfig.slopePct);
+        if (dynoRho) dynoRho.value = String(roadDynoConfig.airDensityKgM3);
+        if (dynoRpm2Speed) dynoRpm2Speed.value = String(roadDynoConfig.rpmToSpeedKmhPer1000);
+        if (dynoFilterWindow) dynoFilterWindow.value = String(roadDynoConfig.filterWindow);
+        syncRoadDynoFilterLabel();
+      }
+
+      function readRoadDynoInputs() {
+        const next = {
+          vehicleMassKg: Number(dynoMass ? dynoMass.value : roadDynoConfig.vehicleMassKg),
+          driverMassKg: Number(dynoDriverMass ? dynoDriverMass.value : roadDynoConfig.driverMassKg),
+          cx: Number(dynoCx ? dynoCx.value : roadDynoConfig.cx),
+          frontalAreaM2: Number(dynoArea ? dynoArea.value : roadDynoConfig.frontalAreaM2),
+          crr: Number(dynoCrr ? dynoCrr.value : roadDynoConfig.crr),
+          drivetrainLossPct: Number(dynoLoss ? dynoLoss.value : roadDynoConfig.drivetrainLossPct),
+          slopePct: Number(dynoSlope ? dynoSlope.value : roadDynoConfig.slopePct),
+          airDensityKgM3: Number(dynoRho ? dynoRho.value : roadDynoConfig.airDensityKgM3),
+          rpmToSpeedKmhPer1000: Number(dynoRpm2Speed ? dynoRpm2Speed.value : roadDynoConfig.rpmToSpeedKmhPer1000),
+          filterWindow: Number(dynoFilterWindow ? dynoFilterWindow.value : roadDynoConfig.filterWindow),
+        };
+        if (!Number.isFinite(next.vehicleMassKg) || next.vehicleMassKg < 200 || next.vehicleMassKg > 4000) {
+          return false;
+        }
+        if (!Number.isFinite(next.driverMassKg) || next.driverMassKg < 0 || next.driverMassKg > 250) {
+          return false;
+        }
+        if (!Number.isFinite(next.cx) || next.cx < 0.1 || next.cx > 1) {
+          return false;
+        }
+        if (!Number.isFinite(next.frontalAreaM2) || next.frontalAreaM2 < 0.8 || next.frontalAreaM2 > 4) {
+          return false;
+        }
+        if (!Number.isFinite(next.crr) || next.crr < 0.004 || next.crr > 0.03) {
+          return false;
+        }
+        if (!Number.isFinite(next.drivetrainLossPct) || next.drivetrainLossPct < 0 || next.drivetrainLossPct > 40) {
+          return false;
+        }
+        if (!Number.isFinite(next.slopePct) || next.slopePct < -20 || next.slopePct > 20) {
+          return false;
+        }
+        if (!Number.isFinite(next.airDensityKgM3) || next.airDensityKgM3 < 0.9 || next.airDensityKgM3 > 1.4) {
+          return false;
+        }
+        if (!Number.isFinite(next.rpmToSpeedKmhPer1000) || next.rpmToSpeedKmhPer1000 < 5 || next.rpmToSpeedKmhPer1000 > 120) {
+          return false;
+        }
+        if (!Number.isFinite(next.filterWindow) || next.filterWindow < 1 || next.filterWindow > 17) {
+          return false;
+        }
+        next.filterWindow = Math.round(next.filterWindow);
+        if (next.filterWindow % 2 === 0) {
+          next.filterWindow += 1;
+        }
+        Object.assign(roadDynoConfig, next);
+        saveRoadDynoConfig();
+        syncRoadDynoInputs();
+        return true;
+      }
+
+      function findRoadDynoLabel(labels, candidates) {
+        const normalized = labels.map((label) => String(label).toLowerCase());
+        for (const candidate of candidates) {
+          const idx = normalized.findIndex((label) => label.includes(candidate));
+          if (idx !== -1) {
+            return labels[idx];
+          }
+        }
+        return null;
+      }
+
+      function smoothSeries(values, windowSize = 5) {
+        if (!Array.isArray(values) || values.length < 3 || windowSize < 2) {
+          return values;
+        }
+        const normalizedWindow = Math.max(1, windowSize % 2 === 0 ? windowSize + 1 : windowSize);
+        const half = Math.floor(normalizedWindow / 2);
+        return values.map((_, index) => {
+          let sum = 0;
+          let count = 0;
+          for (let i = index - half; i <= index + half; i += 1) {
+            if (i < 0 || i >= values.length) {
+              continue;
+            }
+            const v = values[i];
+            if (!Number.isFinite(v)) {
+              continue;
+            }
+            sum += v;
+            count += 1;
+          }
+          return count ? sum / count : values[index];
+        });
+      }
+
+      function clearRoadDynoChart() {
+        if (roadDynoResizeObserver) {
+          roadDynoResizeObserver.disconnect();
+          roadDynoResizeObserver = null;
+        }
+        if (roadDynoChart) {
+          roadDynoChart.destroy();
+          roadDynoChart = null;
+        }
+        if (dynoChartRoot) {
+          dynoChartRoot.innerHTML = "";
+        }
+        roadDynoLastResult = null;
+      }
+
+      function toKmhOrMphToMs(value, speedLabel = "") {
+        const label = String(speedLabel || "").toLowerCase();
+        const isMph = label.includes("mph");
+        const isMs = label.includes("m/s") || label.includes("mps") || label.includes("meter per second") || label.includes("metre par seconde");
+        const raw = Number(value);
+        if (!Number.isFinite(raw) || raw < 0) {
+          return NaN;
+        }
+
+        const convert = (v) => (isMs ? v : ((v * (isMph ? 1.609344 : 1)) / 3.6));
+        let speedMs = convert(raw);
+
+        // Certains ECU/logs stockent la vitesse x10 ou x100 (ex: 1234 => 123.4 km/h)
+        if (speedMs > 120) {
+          const speedMsDiv10 = convert(raw / 10);
+          const speedMsDiv100 = convert(raw / 100);
+          if (speedMsDiv10 <= 120) {
+            speedMs = speedMsDiv10;
+          } else if (speedMsDiv100 <= 120) {
+            speedMs = speedMsDiv100;
+          }
+        }
+        return speedMs;
+      }
+
+      function detectBestRoadDynoPull(events, rpmLabel, speedLabel) {
+        const points = [];
+        events.forEach((ev) => {
+          const ts = Number(ev && ev.ts);
+          const rpm = Number(ev && ev.values && ev.values[rpmLabel]);
+          const speedRaw = Number(ev && ev.values && ev.values[speedLabel]);
+          if (!Number.isFinite(ts) || !Number.isFinite(rpm) || !Number.isFinite(speedRaw)) {
+            return;
+          }
+          const speedMs = toKmhOrMphToMs(speedRaw, speedLabel);
+          if (!Number.isFinite(speedMs) || speedMs < 0) {
+            return;
+          }
+          points.push({ ts, rpm, speedMs, speedRaw });
+        });
+        if (points.length < 12) {
+          return null;
+        }
+
+        const accepted = [];
+        let startIdx = -1;
+        let peakRpm = -Infinity;
+        let negativeAccelCount = 0;
+
+        const closeSegment = (endIdx) => {
+          if (startIdx < 0 || endIdx <= startIdx) {
+            startIdx = -1;
+            peakRpm = -Infinity;
+            negativeAccelCount = 0;
+            return;
+          }
+          const first = points[startIdx];
+          const last = points[endIdx];
+          const durationS = (last.ts - first.ts) / 1000;
+          const deltaRpm = last.rpm - first.rpm;
+          if (durationS >= 2 && deltaRpm >= 1200 && first.rpm >= 1900) {
+            accepted.push({ startIdx, endIdx, durationS, deltaRpm, peakRpm });
+          }
+          startIdx = -1;
+          peakRpm = -Infinity;
+          negativeAccelCount = 0;
+        };
+
+        for (let i = 1; i < points.length; i += 1) {
+          const prev = points[i - 1];
+          const curr = points[i];
+          const dt = (curr.ts - prev.ts) / 1000;
+          if (!Number.isFinite(dt) || dt <= 0 || dt > 1) {
+            closeSegment(i - 1);
+            continue;
+          }
+          const drpmDt = (curr.rpm - prev.rpm) / dt;
+          const dvDt = (curr.speedMs - prev.speedMs) / dt;
+
+          if (startIdx < 0) {
+            if (curr.rpm >= 2000 && drpmDt > 80 && dvDt > 0.15) {
+              startIdx = Math.max(0, i - 1);
+              peakRpm = curr.rpm;
+              negativeAccelCount = 0;
+            }
+            continue;
+          }
+
+          peakRpm = Math.max(peakRpm, curr.rpm);
+          if (dvDt < -0.25 || drpmDt < -200) {
+            negativeAccelCount += 1;
+          } else {
+            negativeAccelCount = 0;
+          }
+          const hasRpmDropFromPeak = peakRpm - curr.rpm > 250;
+          if (negativeAccelCount >= 2 || hasRpmDropFromPeak || curr.rpm < 1800) {
+            closeSegment(i - 1);
+          }
+        }
+        closeSegment(points.length - 1);
+
+        if (!accepted.length) {
+          return null;
+        }
+        accepted.sort((a, b) => {
+          if (b.peakRpm !== a.peakRpm) {
+            return b.peakRpm - a.peakRpm;
+          }
+          if (b.deltaRpm !== a.deltaRpm) {
+            return b.deltaRpm - a.deltaRpm;
+          }
+          return b.durationS - a.durationS;
+        });
+        const best = accepted[0];
+        const pullPoints = points.slice(best.startIdx, best.endIdx + 1);
+        if (!pullPoints.length) {
+          return null;
+        }
+        return {
+          points: pullPoints,
+          startTs: pullPoints[0].ts,
+          endTs: pullPoints[pullPoints.length - 1].ts,
+          startRpm: pullPoints[0].rpm,
+          endRpm: pullPoints[pullPoints.length - 1].rpm,
+          peakRpm: best.peakRpm,
+        };
+      }
+
+      function detectBestRoadDynoPullFromRpm(events, rpmLabel) {
+        const points = [];
+        events.forEach((ev) => {
+          const ts = Number(ev && ev.ts);
+          const rpm = Number(ev && ev.values && ev.values[rpmLabel]);
+          if (!Number.isFinite(ts) || !Number.isFinite(rpm)) {
+            return;
+          }
+          points.push({ ts, rpm });
+        });
+        if (points.length < 12) {
+          return null;
+        }
+
+        const accepted = [];
+        let startIdx = -1;
+        let peakRpm = -Infinity;
+        let negativeCount = 0;
+
+        const closeSegment = (endIdx) => {
+          if (startIdx < 0 || endIdx <= startIdx) {
+            startIdx = -1;
+            peakRpm = -Infinity;
+            negativeCount = 0;
+            return;
+          }
+          const first = points[startIdx];
+          const last = points[endIdx];
+          const durationS = (last.ts - first.ts) / 1000;
+          const deltaRpm = last.rpm - first.rpm;
+          if (durationS >= 2 && deltaRpm >= 1200 && first.rpm >= 1900) {
+            accepted.push({ startIdx, endIdx, durationS, deltaRpm, peakRpm });
+          }
+          startIdx = -1;
+          peakRpm = -Infinity;
+          negativeCount = 0;
+        };
+
+        for (let i = 1; i < points.length; i += 1) {
+          const prev = points[i - 1];
+          const curr = points[i];
+          const dt = (curr.ts - prev.ts) / 1000;
+          if (!Number.isFinite(dt) || dt <= 0 || dt > 1) {
+            closeSegment(i - 1);
+            continue;
+          }
+          const drpmDt = (curr.rpm - prev.rpm) / dt;
+
+          if (startIdx < 0) {
+            if (curr.rpm >= 2000 && drpmDt > 80) {
+              startIdx = Math.max(0, i - 1);
+              peakRpm = curr.rpm;
+              negativeCount = 0;
+            }
+            continue;
+          }
+
+          peakRpm = Math.max(peakRpm, curr.rpm);
+          if (drpmDt < -180) {
+            negativeCount += 1;
+          } else {
+            negativeCount = 0;
+          }
+          const hasRpmDropFromPeak = peakRpm - curr.rpm > 250;
+          if (negativeCount >= 2 || hasRpmDropFromPeak || curr.rpm < 1800) {
+            closeSegment(i - 1);
+          }
+        }
+        closeSegment(points.length - 1);
+
+        if (!accepted.length) {
+          return null;
+        }
+        accepted.sort((a, b) => {
+          if (b.peakRpm !== a.peakRpm) {
+            return b.peakRpm - a.peakRpm;
+          }
+          if (b.deltaRpm !== a.deltaRpm) {
+            return b.deltaRpm - a.deltaRpm;
+          }
+          return b.durationS - a.durationS;
+        });
+        const best = accepted[0];
+        const pullPoints = points.slice(best.startIdx, best.endIdx + 1);
+        if (!pullPoints.length) {
+          return null;
+        }
+        return {
+          points: pullPoints,
+          startTs: pullPoints[0].ts,
+          endTs: pullPoints[pullPoints.length - 1].ts,
+          startRpm: pullPoints[0].rpm,
+          endRpm: pullPoints[pullPoints.length - 1].rpm,
+          peakRpm: best.peakRpm,
+        };
+      }
+
+      function renderRoadDynoChart(rpm, hp, nm) {
+        if (!dynoChartRoot || !window.uPlot || !rpm.length) {
+          return;
+        }
+        clearRoadDynoChart();
+        const width = Math.max(300, dynoChartRoot.clientWidth || 700);
+        const rootParent = dynoChartRoot.parentElement;
+        const height = rootParent
+          ? Math.max(180, (rootParent.clientHeight || 0) - (dynoChartRoot.offsetTop || 0))
+          : Math.max(180, dynoChartRoot.clientHeight || 240);
+        try {
+          roadDynoChart = new uPlot(
+            {
+              width,
+              height,
+              series: [
+                { label: "RPM" },
+                { label: "Puissance (hp)", stroke: "#f39c12", width: 2, scale: "hp" },
+                { label: "Couple (Nm)", stroke: "#2ecc71", width: 2, scale: "nm" },
+              ],
+              scales: {
+                x: { time: false },
+                hp: { auto: true },
+                nm: { auto: true },
+              },
+              axes: [
+                { label: "RPM", stroke: "rgba(255,255,255,0.65)", grid: { show: true, stroke: "rgba(255,255,255,0.06)" } },
+                { scale: "hp", label: "hp", stroke: "#f39c12", grid: { show: true, stroke: "rgba(255,255,255,0.06)" } },
+                { scale: "nm", label: "Nm", stroke: "#2ecc71", side: 1, grid: { show: false } },
+              ],
+              legend: { show: true },
+              cursor: { y: false, points: { show: false } },
+            },
+            [rpm, hp, nm],
+            dynoChartRoot
+          );
+        } catch (error) {
+          setRoadDynoStatus("Erreur pendant le rendu de la courbe.");
+          return;
+        }
+        roadDynoResizeObserver = new ResizeObserver((entries) => {
+          entries.forEach((entry) => {
+            if (!roadDynoChart || !dynoChartRoot) {
+              return;
+            }
+            const nextWidth = Math.max(300, entry.contentRect.width || 300);
+            const parent = dynoChartRoot.parentElement;
+            const availableHeight = parent
+              ? Math.max(180, (parent.clientHeight || 0) - (dynoChartRoot.offsetTop || 0))
+              : Math.max(180, entry.contentRect.height || 180);
+            const nextHeight = availableHeight;
+            // Guard against feedback loop: skip if size is already correct
+            if (Math.abs((roadDynoChart.width || 0) - nextWidth) < 2 &&
+                Math.abs((roadDynoChart.height || 0) - nextHeight) < 2) {
+              return;
+            }
+            roadDynoChart.setSize({ width: nextWidth, height: nextHeight });
+          });
+        });
+        // Observe the parent column so the uPlot canvas can't push the observed element taller
+        roadDynoResizeObserver.observe(dynoChartRoot.parentElement || dynoChartRoot);
+      }
+
+      function triggerCsvDownload(fileName, csvText) {
+        const blob = new Blob([csvText], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      function formatDateForFile(date = new Date()) {
+        const timePart = date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).replace(/:/g, "-");
+        const datePart = date.toLocaleDateString("fr-FR").replace(/\//g, "-");
+        return `${timePart} ${datePart}`;
+      }
+
+      function exportRoadDynoResult() {
+        if (!roadDynoLastResult || !Array.isArray(roadDynoLastResult.rpm) || !roadDynoLastResult.rpm.length) {
+          setRoadDynoStatus("Aucune courbe dyno a exporter.");
+          return;
+        }
+        const meta = roadDynoLastResult.meta || {};
+        const cfg = roadDynoLastResult.config || roadDynoConfig;
+        const lines = [
+          "# Road Dyno Export",
+          `# computed_at,${roadDynoLastResult.computedAt}`,
+          `# pull_start_rpm,${Number(meta.startRpm || 0).toFixed(0)}`,
+          `# pull_end_rpm,${Number(meta.endRpm || 0).toFixed(0)}`,
+          `# pull_peak_rpm,${Number(meta.peakRpm || 0).toFixed(0)}`,
+          `# pull_duration_s,${Number(meta.durationS || 0).toFixed(2)}`,
+          `# points_used,${roadDynoLastResult.rawPointsUsed || 0}`,
+          `# vehicle_mass_kg,${cfg.vehicleMassKg}`,
+          `# driver_mass_kg,${cfg.driverMassKg}`,
+          `# cx,${cfg.cx}`,
+          `# frontal_area_m2,${cfg.frontalAreaM2}`,
+          `# crr,${cfg.crr}`,
+          `# drivetrain_loss_pct,${cfg.drivetrainLossPct}`,
+          `# slope_pct,${cfg.slopePct}`,
+          `# air_density_kg_m3,${cfg.airDensityKgM3}`,
+          `# rpm_to_speed_kmh_per_1000,${cfg.rpmToSpeedKmhPer1000}`,
+          `# smoothing_window,${cfg.filterWindow}`,
+          `# speed_source,${(roadDynoLastResult.labels && roadDynoLastResult.labels.speedLabel) || "estimated_from_rpm"}`,
+          "rpm,hp,nm",
+        ];
+        for (let i = 0; i < roadDynoLastResult.rpm.length; i += 1) {
+          lines.push(`${roadDynoLastResult.rpm[i]},${Number(roadDynoLastResult.hp[i]).toFixed(4)},${Number(roadDynoLastResult.nm[i]).toFixed(4)}`);
+        }
+        const fileName = `RoadDyno ${formatDateForFile()} ${Math.round(meta.startRpm || 2000)}-${Math.round(meta.endRpm || 0)}.csv`;
+        triggerCsvDownload(fileName, lines.join("\n"));
+        setRoadDynoStatus("Export dyno CSV termine.");
+      }
+
+      function computeRoadDynoFromLoadedLog() {
+        if (!readRoadDynoInputs()) {
+          setRoadDynoStatus("Parametres Road Dyno invalides.");
+          return;
+        }
+        if (!loadedLogData || !Array.isArray(loadedLogData.events) || !loadedLogData.events.length) {
+          setRoadDynoStatus("Charge d'abord un log dans l'onglet Monitor.");
+          return;
+        }
+        const labels = loadedLogLabels.slice();
+        const rpmLabel = findRoadDynoLabel(labels, ["engine speed", "rpm"]);
+        const speedLabel = findRoadDynoLabel(labels, ["vehicle speed", "vss", "speed"]);
+        if (!rpmLabel) {
+          setRoadDynoStatus("Impossible de trouver RPM dans le log.");
+          return;
+        }
+
+        const selectedEvents = (currentDynoRange && Number.isFinite(currentDynoRange.minTs))
+          ? loadedLogData.events.filter((ev) => {
+              const ts = Number(ev && ev.ts);
+              return Number.isFinite(ts) && ts >= currentDynoRange.minTs && ts <= currentDynoRange.maxTs;
+            })
+          : loadedLogData.events;
+
+        const useEstimatedSpeed = !speedLabel;
+
+        const pull = useEstimatedSpeed
+          ? detectBestRoadDynoPullFromRpm(selectedEvents, rpmLabel)
+          : detectBestRoadDynoPull(selectedEvents, rpmLabel, speedLabel);
+        if (!pull || !Array.isArray(pull.points) || pull.points.length < 10) {
+          clearRoadDynoChart();
+          setRoadDynoStatus("Aucun pull detecte (2000 rpm -> coupure). Fais un log WOT en acceleration continue.");
+          return;
+        }
+
+        const mTotal = roadDynoConfig.vehicleMassKg + roadDynoConfig.driverMassKg;
+        const rho = roadDynoConfig.airDensityKgM3;
+        const cxArea = roadDynoConfig.cx * roadDynoConfig.frontalAreaM2;
+        const crr = roadDynoConfig.crr;
+        const g = 9.80665;
+        const slopeRad = Math.atan(roadDynoConfig.slopePct / 100);
+        const driveEff = Math.max(0.35, 1 - roadDynoConfig.drivetrainLossPct / 100);
+
+        const bins = new Map();
+        let rawCount = 0;
+        for (let i = 1; i < pull.points.length; i += 1) {
+          const prev = pull.points[i - 1];
+          const curr = pull.points[i];
+          const t0 = Number(prev && prev.ts);
+          const t1 = Number(curr && curr.ts);
+          if (!Number.isFinite(t0) || !Number.isFinite(t1) || t1 <= t0) {
+            continue;
+          }
+          const dt = (t1 - t0) / 1000;
+          if (!Number.isFinite(dt) || dt < 0.03 || dt > 1.2) {
+            continue;
+          }
+          const rpm0 = Number(prev && prev.rpm);
+          const rpm1 = Number(curr && curr.rpm);
+          const v0 = useEstimatedSpeed
+            ? ((rpm0 / 1000) * roadDynoConfig.rpmToSpeedKmhPer1000) / 3.6
+            : Number(prev && prev.speedMs);
+          const v1 = useEstimatedSpeed
+            ? ((rpm1 / 1000) * roadDynoConfig.rpmToSpeedKmhPer1000) / 3.6
+            : Number(curr && curr.speedMs);
+          if (!Number.isFinite(rpm0) || !Number.isFinite(rpm1) || !Number.isFinite(v0) || !Number.isFinite(v1)) {
+            continue;
+          }
+          const rpm = (rpm0 + rpm1) * 0.5;
+          if (!Number.isFinite(rpm) || rpm < 900) {
+            continue;
+          }
+          const v = (v0 + v1) * 0.5;
+          if (!Number.isFinite(v) || v < 2 || v > 120) {
+            continue;
+          }
+          const accel = (v1 - v0) / dt;
+          if (!Number.isFinite(accel) || accel < -2 || accel > 12) {
+            continue;
+          }
+          const drag = 0.5 * rho * cxArea * v * v;
+          const roll = mTotal * g * crr * Math.cos(slopeRad);
+          const grade = mTotal * g * Math.sin(slopeRad);
+          const force = mTotal * accel + drag + roll + grade;
+          const wheelPowerW = force * v;
+          const enginePowerW = wheelPowerW / driveEff;
+          if (!Number.isFinite(enginePowerW) || enginePowerW <= 1500) {
+            continue;
+          }
+          const omega = (2 * Math.PI * rpm) / 60;
+          if (!Number.isFinite(omega) || omega <= 0) {
+            continue;
+          }
+          const torqueNm = enginePowerW / omega;
+          const hp = enginePowerW / 745.699872;
+          if (!Number.isFinite(hp) || !Number.isFinite(torqueNm) || hp <= 0 || torqueNm <= 0 || hp > 2500 || torqueNm > 4000) {
+            continue;
+          }
+          const rpmBin = Math.round(rpm / 100) * 100;
+          if (!bins.has(rpmBin)) {
+            bins.set(rpmBin, { hpSum: 0, nmSum: 0, count: 0 });
+          }
+          const bucket = bins.get(rpmBin);
+          bucket.hpSum += hp;
+          bucket.nmSum += torqueNm;
+          bucket.count += 1;
+          rawCount += 1;
+        }
+
+        const rpm = Array.from(bins.keys()).sort((a, b) => a - b);
+        if (!rpm.length) {
+          clearRoadDynoChart();
+          setRoadDynoStatus("Pas assez de donnees exploitables pour calculer la courbe.");
+          return;
+        }
+        const hp = rpm.map((key) => {
+          const bucket = bins.get(key);
+          return bucket.count ? bucket.hpSum / bucket.count : null;
+        });
+        const nm = rpm.map((key) => {
+          const bucket = bins.get(key);
+          return bucket.count ? bucket.nmSum / bucket.count : null;
+        });
+        const hpSmooth = smoothSeries(hp, roadDynoConfig.filterWindow);
+        const nmSmooth = smoothSeries(nm, roadDynoConfig.filterWindow);
+        const maxHp = Math.max(...hpSmooth.filter((v) => Number.isFinite(v)));
+        const maxNm = Math.max(...nmSmooth.filter((v) => Number.isFinite(v)));
+        const maxHpRpm = rpm[hpSmooth.findIndex((v) => v === maxHp)];
+        const maxNmRpm = rpm[nmSmooth.findIndex((v) => v === maxNm)];
+
+        renderRoadDynoChart(rpm, hpSmooth, nmSmooth);
+        const durationS = (pull.endTs - pull.startTs) / 1000;
+        roadDynoLastResult = {
+          computedAt: new Date().toISOString(),
+          rpm: rpm.slice(),
+          hp: hpSmooth.slice(),
+          nm: nmSmooth.slice(),
+          rawPointsUsed: rawCount,
+          config: { ...roadDynoConfig },
+          labels: { rpmLabel, speedLabel: speedLabel || "estimated_from_rpm" },
+          meta: {
+            startRpm: pull.startRpm,
+            endRpm: pull.endRpm,
+            peakRpm: pull.peakRpm,
+            durationS,
+          },
+        };
+        const modeText = useEstimatedSpeed ? `Mode estime (rpm->km/h: ${roadDynoConfig.rpmToSpeedKmhPer1000.toFixed(1)} @1000rpm)` : `Canal vitesse: ${speedLabel}`;
+        setRoadDynoStatus(`Pull detecte ${Math.round(pull.startRpm)} -> ${Math.round(pull.peakRpm)} rpm (${durationS.toFixed(1)}s) | ${modeText} | Filtre ${roadDynoConfig.filterWindow} | Max ${maxHp.toFixed(1)} hp @ ${maxHpRpm} rpm | Max ${maxNm.toFixed(1)} Nm @ ${maxNmRpm} rpm`);
       }
 
       function updatePanelValues(sample) {
@@ -3837,6 +4868,7 @@
       loadAliasMap();
       loadPanelConfig();
       loadMonitorConfig();
+      loadRoadDynoConfig();
       loadDisplaySettings();
       loadHiddenSeries();
       syncFullscreenUi();
@@ -3844,6 +4876,7 @@
       buildMonitorCharts();
       applyPanelSplit(loadPanelSplit());
       syncSettingsInputs();
+      syncRoadDynoInputs();
       renderLoadedLogValues();
       setRecordingUiState();
       syncHistoryDatasets();
@@ -3999,6 +5032,33 @@
       if (displayApply) {
         displayApply.addEventListener("click", applyDisplaySettings);
       }
+      if (dynoCalc) {
+        dynoCalc.addEventListener("click", computeRoadDynoFromLoadedLog);
+      }
+      if (dynoClear) {
+        dynoClear.addEventListener("click", () => {
+          clearRoadDynoChart();
+          setRoadDynoStatus("Courbe effacee.");
+        });
+      }
+      if (dynoExport) {
+        dynoExport.addEventListener("click", exportRoadDynoResult);
+      }
+      if (dynoFilterWindow) {
+        dynoFilterWindow.addEventListener("input", () => {
+          const next = Number(dynoFilterWindow.value);
+          if (!Number.isFinite(next)) {
+            return;
+          }
+          roadDynoConfig.filterWindow = next % 2 === 0 ? next + 1 : next;
+          if (roadDynoConfig.filterWindow > 17) {
+            roadDynoConfig.filterWindow = 17;
+          }
+          dynoFilterWindow.value = String(roadDynoConfig.filterWindow);
+          syncRoadDynoFilterLabel();
+          saveRoadDynoConfig();
+        });
+      }
       if (monitorZoomSlider) {
         monitorZoomSlider.addEventListener("input", () => {
           monitorConfig.zoom = Math.max(1, Math.min(12, Number(monitorZoomSlider.value) || 1));
@@ -4050,6 +5110,63 @@
       if (recordToggle) {
         recordToggle.addEventListener("click", toggleRecording);
       }
+      document.addEventListener("keydown", (e) => {
+        if (e.code === "Space" && e.target === document.body) {
+          e.preventDefault();
+          toggleRecording();
+        }
+        if (e.key === "Escape") {
+          hideMonitorContextMenu();
+        }
+      });
+      // Context menu — Zoom selection
+      const monitorCtxZoom = document.getElementById("monitor-ctx-zoom");
+      if (monitorCtxZoom) {
+        monitorCtxZoom.addEventListener("click", () => {
+          if (monitorPendingSelection) {
+            applyZoomRange(monitorPendingSelection.minTs, monitorPendingSelection.maxTs);
+          }
+          hideMonitorContextMenu();
+        });
+      }
+      // Context menu — Dyno from selection
+      const monitorCtxDynoPl = document.getElementById("monitor-ctx-dyno-pl");
+      if (monitorCtxDynoPl) {
+        monitorCtxDynoPl.addEventListener("click", () => {
+          if (monitorPendingSelection) {
+            openDynoWithRange(monitorPendingSelection.minTs, monitorPendingSelection.maxTs);
+          }
+          hideMonitorContextMenu();
+        });
+      }
+      // Context menu — Dyno from current view
+      const monitorCtxDynoView = document.getElementById("monitor-ctx-dyno-view");
+      if (monitorCtxDynoView) {
+        monitorCtxDynoView.addEventListener("click", () => {
+          const range = monitorContextViewRange || getMonitorLogTimeRange();
+          if (range) {
+            openDynoWithRange(range.minTs, range.maxTs);
+          }
+          hideMonitorContextMenu();
+        });
+      }
+      // Context menu — Reset zoom
+      const monitorCtxReset = document.getElementById("monitor-ctx-reset");
+      if (monitorCtxReset) {
+        monitorCtxReset.addEventListener("click", () => {
+          const range = getMonitorLogTimeRange();
+          if (range) {
+            applyZoomRange(range.minTs, range.maxTs);
+          }
+          hideMonitorContextMenu();
+        });
+      }
+      // Close context menu when clicking outside it
+      document.addEventListener("click", (e) => {
+        if (monitorContextMenu && !monitorContextMenu.classList.contains("hidden") && !monitorContextMenu.contains(e.target)) {
+          hideMonitorContextMenu();
+        }
+      });
       if (loadLogButton && loadLogInput) {
         loadLogButton.addEventListener("click", () => {
           loadLogInput.click();
