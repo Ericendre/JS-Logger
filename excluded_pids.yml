@@ -62,7 +62,6 @@ excluded_pids:
   - LAMUP1
   - MAP
   - MAPPSI
-  - MAFVOLT
   - OILTEMPVOLT
   - OXYHDUTYB1S1
   - OXYHDUTYB1S2
@@ -74,7 +73,6 @@ excluded_pids:
   - PARTLOADRPM
   - PURGEVALVE
   - TIDLESPEED
-  - TPS
   - TPSVOLT
   - VEGTDOWN2
   - VOLTIGNITIONKE
