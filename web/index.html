@@ -715,6 +715,12 @@
         display: flex;
       }
 
+      .monitor-panel.drag-active {
+        outline: 2px dashed rgba(52, 152, 219, 0.9);
+        outline-offset: -6px;
+        background: rgba(52, 152, 219, 0.08);
+      }
+
       .monitor-toolbar {
         display: grid;
         gap: 8px;
@@ -970,8 +976,7 @@
           <span id="ble-status">BLE: off</span>
         </div>
         <div class="controls">
-          <button class="button" id="connect-button">Connect ECU</button>
-          <button class="button" id="ble-connect-button">Connect BLE</button>
+          <button class="button" id="connect-button">Connect ECU + BLE</button>
           <button class="button" id="fullscreen-button" type="button">Plein ecran</button>
         </div>
       </div>
@@ -1282,7 +1287,6 @@
       const statusHz = document.getElementById("status-hz");
       const timestampEl = document.getElementById("timestamp");
       const connectButton = document.getElementById("connect-button");
-      const bleConnectButton = document.getElementById("ble-connect-button");
       const fullscreenButton = document.getElementById("fullscreen-button");
       const bleStatus = document.getElementById("ble-status");
       const simulateButton = document.getElementById("simulate-button");
@@ -1299,6 +1303,7 @@
       const loadLogButton = document.getElementById("load-log-button");
       const loadLogInput = document.getElementById("load-log-input");
       const loadLogStatus = document.getElementById("load-log-status");
+      const monitorPanelEl = document.querySelector('[data-panel="monitor"]');
       const valueOverlay = document.getElementById("value-overlay");
       const valueTitle = document.getElementById("value-title");
       const valueDecimals = document.getElementById("value-decimals");
@@ -1587,6 +1592,7 @@
 
       const SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
       const TX_CHAR_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+  const bleDeviceStorageKey = "gkflasher.lastBleDevice";
       let bleDevice = null;
       let bleServer = null;
       let bleService = null;
@@ -1863,46 +1869,164 @@
         }
       }
 
-      function setBleUiConnected(connected) {
-        if (bleConnectButton) {
-          bleConnectButton.textContent = connected ? "Disconnect BLE" : "Connect BLE";
+      function setConnectButtonBusy(isBusy) {
+        if (connectButton) {
+          connectButton.disabled = !!isBusy;
         }
       }
 
-      async function connectBle() {
-        if (!navigator.bluetooth) {
-          setBleStatus("unsupported");
-          return;
-        }
-        if (bleDevice && bleDevice.gatt && bleDevice.gatt.connected) {
-          bleDevice.gatt.disconnect();
-          setBleStatus("off");
-          setBleUiConnected(false);
+      function rememberBleDevice(device) {
+        if (!device) {
           return;
         }
         try {
-          setBleStatus("search...");
-          bleDevice = await navigator.bluetooth.requestDevice({
-            filters: [{ namePrefix: "ESP32" }],
-            optionalServices: [SERVICE_UUID],
-          });
-          bleDevice.addEventListener("gattserverdisconnected", () => {
+          localStorage.setItem(
+            bleDeviceStorageKey,
+            JSON.stringify({
+              id: typeof device.id === "string" ? device.id : "",
+              name: typeof device.name === "string" ? device.name : "",
+            })
+          );
+        } catch (error) {
+        }
+      }
+
+      function loadRememberedBleDeviceMeta() {
+        try {
+          const raw = localStorage.getItem(bleDeviceStorageKey);
+          if (!raw) {
+            return null;
+          }
+          const data = JSON.parse(raw);
+          if (!data || typeof data !== "object") {
+            return null;
+          }
+          return {
+            id: typeof data.id === "string" ? data.id : "",
+            name: typeof data.name === "string" ? data.name : "",
+          };
+        } catch (error) {
+          return null;
+        }
+      }
+
+      function attachBleDisconnectHandler(device) {
+        if (!device || device.__gkflasherDisconnectHandlerAttached) {
+          return;
+        }
+        device.addEventListener("gattserverdisconnected", () => {
+          bleServer = null;
+          bleService = null;
+          bleTxChar = null;
+          setBleStatus("off");
+        });
+        device.__gkflasherDisconnectHandlerAttached = true;
+      }
+
+      function attachBleNotifyHandler(characteristic) {
+        if (!characteristic || characteristic.__gkflasherNotifyHandlerAttached) {
+          return;
+        }
+        characteristic.addEventListener("characteristicvaluechanged", onBleNotify);
+        characteristic.__gkflasherNotifyHandlerAttached = true;
+      }
+
+      async function requestBleDeviceSelection() {
+        setBleStatus("search...");
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ namePrefix: "ESP32" }],
+          optionalServices: [SERVICE_UUID],
+        });
+        bleDevice = device;
+        attachBleDisconnectHandler(device);
+        rememberBleDevice(device);
+        return device;
+      }
+
+      async function getRememberedBleDevice() {
+        if (!navigator.bluetooth || typeof navigator.bluetooth.getDevices !== "function") {
+          return null;
+        }
+        const remembered = loadRememberedBleDeviceMeta();
+        if (!remembered || !remembered.id) {
+          return null;
+        }
+        try {
+          const devices = await navigator.bluetooth.getDevices();
+          const device = devices.find((entry) => entry && entry.id === remembered.id) || null;
+          if (device) {
+            bleDevice = device;
+            attachBleDisconnectHandler(device);
+            rememberBleDevice(device);
+          }
+          return device;
+        } catch (error) {
+          return null;
+        }
+      }
+
+      async function ensureBleDeviceSelected(options = {}) {
+        const { promptIfMissing = true } = options;
+        if (bleDevice) {
+          attachBleDisconnectHandler(bleDevice);
+          return bleDevice;
+        }
+        const rememberedDevice = await getRememberedBleDevice();
+        if (rememberedDevice) {
+          return rememberedDevice;
+        }
+        if (!promptIfMissing) {
+          return null;
+        }
+        return requestBleDeviceSelection();
+      }
+
+      async function connectBle(options = {}) {
+        if (!navigator.bluetooth) {
+          setBleStatus("unsupported");
+          return false;
+        }
+
+        const { promptIfMissing = true } = options;
+
+        try {
+          const device = await ensureBleDeviceSelected({ promptIfMissing });
+          if (!device) {
             setBleStatus("off");
-            setBleUiConnected(false);
-          });
+            return false;
+          }
+
+          if (device.gatt && device.gatt.connected) {
+            bleDevice = device;
+            bleServer = device.gatt;
+            setBleStatus("connected");
+            return true;
+          }
+
+          setBleStatus("connecting...");
+          bleDevice = device;
+          attachBleDisconnectHandler(device);
           bleServer = await bleDevice.gatt.connect();
           bleService = await bleServer.getPrimaryService(SERVICE_UUID);
           bleTxChar = await bleService.getCharacteristic(TX_CHAR_UUID);
           await bleTxChar.startNotifications();
-          bleTxChar.addEventListener("characteristicvaluechanged", onBleNotify);
+          attachBleNotifyHandler(bleTxChar);
           setBleStatus("connected");
-          setBleUiConnected(true);
+          rememberBleDevice(device);
           if (simulateOn) {
             stopSimulation();
           }
+          return true;
         } catch (error) {
-          setBleStatus("error");
-          setBleUiConnected(false);
+          bleServer = null;
+          bleService = null;
+          bleTxChar = null;
+          if (error && error.name === "NotFoundError") {
+            setBleStatus("off");
+          } else {
+            setBleStatus("error");
+          }
+          return false;
         }
       }
 
@@ -2042,35 +2166,44 @@
           const status = await response.json();
           if (status.connected) {
             setStatus("Live", "ok");
-            connectButton.disabled = true;
+            setConnectButtonBusy(false);
             return;
           }
           if (status.connecting) {
             setStatus("Connecting to ECU...", "warn");
-            connectButton.disabled = true;
+            setConnectButtonBusy(true);
             return;
           }
           if (status.error) {
             setStatus(`ECU error: ${status.error}`, "error");
-            connectButton.disabled = false;
+            setConnectButtonBusy(false);
             return;
           }
           setStatus("ECU not connected", "warn");
-          connectButton.disabled = false;
+          setConnectButtonBusy(false);
         } catch (error) {
           setStatus("Server not reachable", "error");
-          connectButton.disabled = false;
+          setConnectButtonBusy(false);
         }
       }
 
       async function requestConnect() {
-        connectButton.disabled = true;
+        setConnectButtonBusy(true);
         try {
           await fetch("/connect", { method: "POST" });
         } catch (error) {
           setStatus("Connect request failed", "error");
         }
-        fetchStatus();
+      }
+
+      async function connectEcuAndBle() {
+        setConnectButtonBusy(true);
+        try {
+          const tasks = [requestConnect(), connectBle({ promptIfMissing: true })];
+          await Promise.allSettled(tasks);
+        } finally {
+          fetchStatus();
+        }
       }
 
       
@@ -2730,7 +2863,7 @@
 
         normalizedEvents.sort((a, b) => a.ts - b.ts);
 
-        const labelSet = new Set(labelsFromHeader);
+        const labelSet = new Set();
         normalizedEvents.forEach((event) => {
           Object.keys(event.values).forEach((label) => labelSet.add(label));
         });
@@ -2855,6 +2988,39 @@
           setRoadDynoStatus("Erreur de lecture du log.");
         });
         reader.readAsText(file);
+      }
+
+      function hasDraggedFiles(dataTransfer) {
+        if (!dataTransfer) {
+          return false;
+        }
+        if (dataTransfer.files && dataTransfer.files.length > 0) {
+          return true;
+        }
+        if (!dataTransfer.types) {
+          return false;
+        }
+        return Array.from(dataTransfer.types).includes("Files");
+      }
+
+      function clearMonitorDragState() {
+        if (monitorPanelEl) {
+          monitorPanelEl.classList.remove("drag-active");
+        }
+      }
+
+      function handleMonitorDrop(event) {
+        if (!hasDraggedFiles(event.dataTransfer)) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        clearMonitorDragState();
+        const [file] = Array.from(event.dataTransfer.files || []);
+        if (!file) {
+          return;
+        }
+        handleLoadedLogFile(file);
       }
 
       function openOptions() {
@@ -4211,7 +4377,7 @@
           const last = points[endIdx];
           const durationS = (last.ts - first.ts) / 1000;
           const deltaRpm = last.rpm - first.rpm;
-          if (durationS >= 2 && deltaRpm >= 1200 && first.rpm >= 1900) {
+          if (durationS >= 2 && deltaRpm >= 1200 && first.rpm >= 1800) {
             accepted.push({ startIdx, endIdx, durationS, deltaRpm, peakRpm });
           }
           startIdx = -1;
@@ -4309,7 +4475,7 @@
           const last = points[endIdx];
           const durationS = (last.ts - first.ts) / 1000;
           const deltaRpm = last.rpm - first.rpm;
-          if (durationS >= 2 && deltaRpm >= 1200 && first.rpm >= 1900) {
+          if (durationS >= 2 && deltaRpm >= 1200 && first.rpm >= 1800) {
             accepted.push({ startIdx, endIdx, durationS, deltaRpm, peakRpm });
           }
           startIdx = -1;
@@ -5379,12 +5545,9 @@
       connect();
       fetchStatus();
       setInterval(fetchStatus, 3000);
-      connectButton.addEventListener("click", requestConnect);
+      connectButton.addEventListener("click", connectEcuAndBle);
       if (simulateButton) {
         simulateButton.addEventListener("click", toggleSimulation);
-      }
-      if (bleConnectButton) {
-        bleConnectButton.addEventListener("click", connectBle);
       }
       if (optionsButton) {
         optionsButton.addEventListener("click", openOptions);
@@ -5690,6 +5853,31 @@
           handleLoadedLogFile(file);
           loadLogInput.value = "";
         });
+      }
+      if (monitorPanelEl) {
+        monitorPanelEl.addEventListener("dragenter", (event) => {
+          if (!hasDraggedFiles(event.dataTransfer)) {
+            return;
+          }
+          event.preventDefault();
+          monitorPanelEl.classList.add("drag-active");
+        });
+        monitorPanelEl.addEventListener("dragover", (event) => {
+          if (!hasDraggedFiles(event.dataTransfer)) {
+            return;
+          }
+          event.preventDefault();
+          if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = "copy";
+          }
+          monitorPanelEl.classList.add("drag-active");
+        });
+        monitorPanelEl.addEventListener("dragleave", (event) => {
+          if (!monitorPanelEl.contains(event.relatedTarget)) {
+            clearMonitorDragState();
+          }
+        });
+        monitorPanelEl.addEventListener("drop", handleMonitorDrop);
       }
       if (fullscreenButton) {
         fullscreenButton.addEventListener("click", toggleFullscreen);
