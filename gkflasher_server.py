@@ -55,8 +55,15 @@ def build_config(args: argparse.Namespace) -> dict:
     return config
 
 
+def is_vehicle_speed_value(title: str, units: str) -> bool:
+    title_lc = str(title or "").strip().lower()
+    units_lc = str(units or "").strip().lower()
+    return "vehicle speed" in title_lc and units_lc == "mph"
+
+
 def normalize_label(title: str, units: str) -> str:
-    return f"{title} ({units})" if units else title
+    display_units = "km/h" if is_vehicle_speed_value(title, units) else units
+    return f"{title} ({display_units})" if display_units else title
 
 
 class SafeExpression:
@@ -108,6 +115,7 @@ class AdxValueDefinition:
         self.title = title
         self.units = units
         self.label = normalize_label(title, units)
+        self.convert_mph_to_kmh = is_vehicle_speed_value(title, units)
         self.packet_offset = packet_offset
         self.size_bits = size_bits
         self.signed = signed
@@ -173,6 +181,9 @@ class AdxDecoder:
                 result = float(definition.expression.evaluate(variables))
         except Exception:
             result = None
+
+        if result is not None and definition.convert_mph_to_kmh:
+            result *= 1.609344
 
         cache[definition.value_id] = result
         return result
